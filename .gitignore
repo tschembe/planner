@@ -1,0 +1,24 @@
+# Ruflo local secrets and runtime data
+.env
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+
+# real data: config and schedules with employees' names and availability
+config.json
+schedule_*.json
+*.tmp
+*.xlsx
+
+# runtime logs and caches
+logs/
+__pycache__/
+
+# local tooling state (Claude Code / ruflo)
+.claude/
+.claude-flow/
+.swarm/
+ruvector.db
+CLAUDE.md

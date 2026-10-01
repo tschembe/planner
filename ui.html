@@ -1,0 +1,2126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shift Planner</title>
+<script>
+  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) { /* storage unavailable */ }
+</script>
+<style>
+:root {
+  --bg: #f5f4f1; --panel: #ffffff; --ink: #1c1e22; --muted: #686d75; --line: #e2e0db; --soft: #f0eee9;
+  --accent: #1f5fd1; --accent-ink: #ffffff;
+  --M: #2459c7; --M-bg: #dbe6fb; --C: #19804a; --C-bg: #d7f0e0; --N: #6f747b; --N-bg: #e9e7e2; --X: #bf3328; --X-bg: #f9dcd8;
+  --weekend: #fbf6ea; --warn: #8f5500; --warn-bg: #fff2da; --bad: #b3261e; --bad-bg: #fde6e3; --ok: #17663a; --ok-bg: #dff3e7;
+  --hl: #ffe27a; --bad-ink: #ffffff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518; --panel: #1d1f23; --ink: #e8e8ea; --muted: #9a9ea6; --line: #2e3137; --soft: #25282d;
+    --accent: #5b8def; --accent-ink: #0d1117;
+    --M: #86a9f5; --M-bg: #213256; --C: #6fd39b; --C-bg: #1b3a2a; --N: #a3a7ae; --N-bg: #2b2e33; --X: #f08a80; --X-bg: #4a2320;
+    --weekend: #221f18; --warn: #f2bd6b; --warn-bg: #3a2c14; --bad: #f28b82; --bad-bg: #3d1f1c; --ok: #7fd6a2; --ok-bg: #173424;
+    --hl: #6b5a12; --bad-ink: #1d1f23;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518; --panel: #1d1f23; --ink: #e8e8ea; --muted: #9a9ea6; --line: #2e3137; --soft: #25282d;
+  --accent: #5b8def; --accent-ink: #0d1117;
+  --M: #86a9f5; --M-bg: #213256; --C: #6fd39b; --C-bg: #1b3a2a; --N: #a3a7ae; --N-bg: #2b2e33; --X: #f08a80; --X-bg: #4a2320;
+  --weekend: #221f18; --warn: #f2bd6b; --warn-bg: #3a2c14; --bad: #f28b82; --bad-bg: #3d1f1c; --ok: #7fd6a2; --ok-bg: #173424;
+  --hl: #6b5a12; --bad-ink: #1d1f23;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+
+/* ---- header ---- */
+header { position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--line); }
+.menu-wrap { position: relative; }
+#menu-btn { font-size: 18px; line-height: 1; padding: 6px 10px; }
+#menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 260px; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); padding: 12px 14px; }
+#menu h3 { margin: 0 0 10px; font-size: 14px; }
+#menu .row { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
+#menu .toggles .toggle { flex: 1; }
+#menu { width: 300px; max-height: calc(100vh - 90px); overflow-y: auto; }
+#menu .row > .btn { text-align: left; }
+.btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.danger:hover { background: var(--bad-bg); }
+.history { list-style: none; margin: 2px 0; padding: 0; max-height: 240px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.history li { border-bottom: 1px solid var(--line); }
+.history li:last-child { border-bottom: 0; }
+.history button { display: flex; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 5px 8px; font-size: 12px; color: var(--ink); }
+.history button:hover { background: var(--soft); }
+.history .when { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.history .empty { padding: 6px 8px; font-size: 12px; color: var(--muted); }
+.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; max-width: 1400px; margin: 0 auto; }
+.brand { font-weight: 650; font-size: 16px; margin-right: 8px; }
+.bar .spacer { flex: 1; }
+#status { font-size: 12px; color: var(--muted); }
+#status.dirty { color: var(--warn); }
+#status.error { color: var(--bad); }
+.tabs { display: flex; gap: 2px; padding: 0 16px; max-width: 1400px; margin: 0 auto; }
+.tab { border: 0; background: none; padding: 8px 14px; border-bottom: 2px solid transparent; color: var(--muted); }
+.tab.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.tab .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; font-size: 11px; background: var(--warn-bg); color: var(--warn); }
+
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 6px 12px; }
+.btn:hover { background: var(--soft); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted); padding: 4px 8px; }
+.btn.ghost:hover { color: var(--bad); background: var(--bad-bg); }
+.field { display: inline-flex; align-items: center; gap: 6px; }
+input[type=text], input[type=number], input[type=time], input[type=month], select {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 7px; min-width: 0;
+}
+input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+main { max-width: 1400px; margin: 0 auto; padding: 16px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+td input[type=number] { width: 72px; }
+td input.wd { width: 46px; }
+td input[type=text] { width: 100%; min-width: 110px; }
+.hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; }
+.grid2 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.grid2 label input { color: var(--ink); font-size: 14px; }
+.toggles { display: flex; gap: 4px; flex-wrap: wrap; }
+.toggle { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 4px 9px; font-size: 13px; }
+.toggle.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+details summary { cursor: pointer; font-weight: 600; }
+
+/* ---- availability ---- */
+.avail { display: grid; grid-template-columns: 220px 1fr 280px; gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .avail { grid-template-columns: 200px 1fr; } .avail .side-right { grid-column: 1 / -1; } }
+.avail > * { min-width: 0; }
+@media (max-width: 700px) {
+  .avail { grid-template-columns: 1fr; }
+  .avail .emp-list { flex-direction: row; flex-wrap: wrap; }
+  .avail .emp-btn { flex: 1 1 120px; }
+}
+.emp-list { display: flex; flex-direction: column; gap: 4px; }
+.emp-btn { text-align: left; border: 1px solid transparent; background: none; border-radius: 8px; padding: 7px 9px; }
+.emp-btn:hover { background: var(--soft); }
+.emp-btn.active { border-color: var(--accent); background: var(--soft); }
+.emp-btn .n { font-weight: 600; display: block; margin-bottom: 4px; }
+.mix { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--soft); }
+.mix span { display: block; height: 100%; }
+td.night-cell { text-align: center; }
+td input[type=text].time { width: 70px; font-variant-numeric: tabular-nums; }
+.stepbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line);
+  border-left: 4px solid var(--accent); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+.stepbar .step { font-weight: 700; color: var(--accent); white-space: nowrap; }
+.stepbar .spacer { flex: 1; }
+.level-help { font-size: 12px; color: var(--muted); margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.level-help b { font-weight: 600; }
+.editable { cursor: pointer; border-radius: 6px; }
+#emp-table.basic .adv { display: none; }
+/* team view needs the width: coverage check moves below the grid */
+.avail.team-view { grid-template-columns: 200px 1fr; }
+.avail.team-view .side-right { grid-column: 1 / -1; }
+.stat-row { display: flex; gap: 6px; margin-bottom: 10px; }
+.stat { flex: 1; background: var(--soft); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); }
+.staff-table { table-layout: fixed; }
+.staff-table th, .staff-table td { padding: 3px 4px; font-size: 12px; }
+.staff-table td:first-child { overflow-wrap: anywhere; }
+.staff-table th { white-space: normal; line-height: 1.2; vertical-align: bottom; font-size: 11px; hyphens: auto; }
+.staff-table th:first-child, .staff-table td:first-child { width: 28%; }
+.staff-table td.num, .staff-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.staff-table td.short { color: var(--bad); font-weight: 700; }
+.checks h3 { font-size: 13px; margin: 12px 0 4px; }
+@media (max-width: 700px) { .avail.team-view { grid-template-columns: 1fr; } }
+.opt-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.opt-toggle input { accent-color: var(--accent); }
+.move { padding: 2px 6px; }
+.move:hover { color: var(--accent); background: var(--soft); }
+.view-switch { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0 0 12px; }
+.tgrid-wrap { overflow-x: auto; user-select: none; }
+.tgrid { border-collapse: separate; border-spacing: 2px; width: auto; }
+.tgrid th, .tgrid td { padding: 0; border: 0; text-align: center; }
+.tgrid thead th { font-size: 11px; font-weight: 600; color: var(--muted); min-width: 26px; }
+.tgrid thead th.wkd, .tgrid tfoot td.wkd { background: var(--weekend); border-radius: 4px; }
+.tgrid .dayh { border: 0; background: none; font: inherit; color: inherit; padding: 2px 0; width: 100%; border-radius: 4px; line-height: 1.2; }
+.tgrid .dayh:hover, .tgrid .rowh:hover { background: var(--soft); color: var(--ink); }
+.tgrid .rowh { border: 0; background: none; font-weight: 600; font-size: 13px; text-align: left; padding: 2px 8px 2px 2px; border-radius: 4px; white-space: nowrap; }
+.tgrid .chip.tcell { width: 26px; height: 24px; padding: 0; text-align: center; font-size: 11px; }
+.tgrid .chip.tcell.closed { background: none; color: var(--muted); cursor: default; }
+.tgrid tfoot td { font-size: 11px; color: var(--muted); padding-top: 4px; }
+.tgrid tfoot td.short { color: var(--bad); font-weight: 700; }
+.editable:hover { background: var(--soft); box-shadow: 0 0 0 1px var(--line); }
+td.editable:hover { background: var(--soft); }
+td.night-cell input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+td.night-cell input:disabled { cursor: default; }
+.chip.off { background: repeating-linear-gradient(135deg, var(--X-bg) 0 5px, var(--soft) 5px 10px); color: var(--muted); cursor: not-allowed; font-weight: 500; }
+.chip.off:hover { filter: none; }
+.tag { display: inline-block; font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.brushes { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.brush { border: 2px solid transparent; border-radius: 8px; padding: 5px 10px; font-weight: 600; font-size: 13px; }
+.brush kbd { font: 11px ui-monospace, monospace; opacity: .7; margin-left: 4px; }
+.brush.on { border-color: var(--ink); }
+.lvl-M { background: var(--M-bg); color: var(--M); }
+.lvl-C { background: var(--C-bg); color: var(--C); }
+.lvl-N { background: var(--N-bg); color: var(--N); }
+.lvl-X { background: var(--X-bg); color: var(--X); }
+.bulk { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 12px 0; font-size: 13px; }
+.cal-wrap { overflow-x: auto; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(78px, 1fr)); gap: 4px; min-width: 580px; user-select: none; }
+.cal .wdh { border: 0; background: none; font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px; border-radius: 6px; }
+.cal .wdh:hover { background: var(--soft); color: var(--ink); }
+.day { border: 1px solid var(--line); border-radius: 8px; padding: 4px; display: flex; flex-direction: column; gap: 3px; background: var(--panel); }
+.day.weekend { background: var(--weekend); }
+.day .dn { border: 0; background: none; font-size: 12px; font-weight: 600; text-align: left; padding: 1px 3px; border-radius: 4px; color: var(--muted); }
+.day .dn:hover { background: var(--soft); color: var(--ink); }
+.chip { border: 0; border-radius: 5px; padding: 3px 5px; font-size: 11px; font-weight: 600; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; touch-action: none; }
+.chip:hover { filter: brightness(0.95); }
+.checks { font-size: 13px; }
+.checks ul { margin: 6px 0 0; padding-left: 18px; }
+.checks li { margin: 2px 0; }
+.note { border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-bottom: 8px; }
+.note.ok { background: var(--ok-bg); color: var(--ok); }
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.note.bad { background: var(--bad-bg); color: var(--bad); }
+
+/* ---- schedule ---- */
+.sched td, .sched th { border-bottom: 1px solid var(--line); }
+.sched tr.weekend td { background: var(--weekend); }
+.sched td.date { white-space: nowrap; font-weight: 600; width: 80px; }
+.pchip { display: inline-flex; align-items: center; gap: 5px; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 12px; background: var(--soft); font-size: 13px; cursor: pointer; }
+.pchip .dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot.M { background: var(--M); } .dot.C { background: var(--C); } .dot.N { background: var(--N); } .dot.X { background: var(--X); }
+.pchip.empty { background: var(--bad-bg); color: var(--bad); font-weight: 600; cursor: default; }
+.mcal { display: grid; grid-template-columns: repeat(7, minmax(118px, 1fr)); gap: 6px; min-width: 840px; }
+.mcal .wdh { font-size: 12px; font-weight: 600; color: var(--muted); padding: 2px 4px; }
+.mday { border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 96px; }
+.mday.weekend { background: var(--weekend); }
+.mday.has-gap { border-color: var(--bad); }
+.mday .dnum { font-weight: 650; font-size: 13px; display: flex; justify-content: space-between; }
+.mday .dnum span { font-weight: 500; color: var(--muted); font-size: 11px; }
+.mshift { display: flex; gap: 5px; align-items: flex-start; font-size: 12px; }
+.mshift .sn { flex: none; min-width: 16px; font-weight: 700; color: var(--muted); padding-top: 2px; }
+.mshift .who { display: flex; flex-wrap: wrap; gap: 2px; }
+.mcal .pchip { font-size: 12px; padding: 1px 6px; margin: 0; gap: 4px; }
+.mcal .pchip .dot { width: 6px; height: 6px; }
+.pchip.hl, td.hl { background: var(--hl); }
+.emp-grid th, .emp-grid td { text-align: center; padding: 4px 2px; font-size: 12px; min-width: 26px; }
+.emp-grid th.wkd, .emp-grid td.wkd { background: var(--weekend); }
+.emp-grid td.name, .emp-grid th.name { text-align: left; padding-left: 8px; white-space: nowrap; font-weight: 600; font-size: 13px; cursor: pointer; }
+.emp-grid td .s { display: inline-block; min-width: 20px; border-radius: 4px; padding: 1px 3px; font-weight: 600; }
+.summary td.num, .summary th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.summary tr { cursor: pointer; }
+.summary tr.hl td { background: var(--hl); }
+.off { color: var(--warn); font-weight: 600; }
+.empty-state { text-align: center; padding: 48px 16px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+.legend span { display: inline-flex; gap: 5px; align-items: center; }
+
+#toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: min(640px, calc(100% - 32px));
+  background: var(--bad); color: var(--bad-ink); padding: 10px 14px; border-radius: 8px; display: none; z-index: 50; box-shadow: 0 4px 18px rgba(0,0,0,.25); }
+#toast.info { background: var(--ink); color: var(--bg); }
+dialog#pick-dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; background: var(--panel); color: var(--ink);
+  width: min(600px, calc(100% - 32px)); max-height: calc(100% - 48px); box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+dialog#pick-dialog::backdrop { background: rgba(0,0,0,.35); }
+#pick-dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+#pick-dialog .head { padding: 16px 18px 8px; }
+#pick-dialog .head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+#pick-dialog .body { padding: 4px 18px; overflow-y: auto; }
+#pick-dialog fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 10px; padding: 8px 12px 10px; }
+#pick-dialog legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+#pick-dialog .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 12px; }
+#pick-dialog label.opt { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; font-size: 14px; cursor: pointer; }
+#pick-dialog label.opt .why { font-size: 11px; color: var(--muted); }
+#pick-dialog label.opt.disabled { color: var(--muted); cursor: not-allowed; }
+#pick-dialog fieldset.invalid { border-color: var(--bad); }
+#pick-dialog .foot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+#pick-dialog .foot .err { color: var(--bad); font-size: 13px; margin-right: auto; }
+#busy { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center; justify-content: center; z-index: 40; }
+#busy .box { background: var(--panel); border-radius: 12px; padding: 22px 28px; text-align: center; min-width: 260px; }
+.spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; margin: 0 auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- printing: one A4 landscape page with just the plan (body.printing is set around window.print) ---- */
+@page { size: A4 landscape; margin: 10mm; }
+@media print {
+  /* always print dark text on white, whatever the screen theme */
+  :root:root:root {
+    --bg: #fff; --panel: #fff; --ink: #000; --muted: #555; --line: #bbb; --soft: #eee;
+    --M: #1b4fb8; --M-bg: #dbe6fb; --C: #146b3c; --C-bg: #d7f0e0; --N: #555; --N-bg: #e9e7e2; --X: #a62b21; --X-bg: #f9dcd8;
+    --weekend: #f6f1e2; --bad: #a62b21; --bad-bg: #fde6e3; --ok: #146b3c; --ok-bg: #dff3e7; --hl: #fff2a8;
+    color-scheme: light;
+  }
+  body { background: #fff; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+body.printing header, body.printing .no-print, body.printing #toast, body.printing .stepbar, body.printing .print-hide,
+body.printing #tab-team, body.printing #tab-avail { display: none !important; }
+body.printing main { padding: 0; max-width: none; width: 277mm; margin: 0; }
+body.printing .panel { border: 0; padding: 0; margin: 0; box-shadow: none; }
+body.printing .panel h2 { margin: 0 0 6px; font-size: 14px; }
+body.printing .scroll { overflow: visible; }
+body.printing .hint { margin: 4px 0 0; font-size: 9px; }
+body.printing .mcal { min-width: 0; gap: 3px; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+body.printing .mcal .wdh { font-size: 10px; padding: 0 2px; }
+body.printing .mday { min-height: 0; padding: 3px 4px; gap: 1px; border-color: #999; break-inside: avoid; }
+body.printing .mday .dnum { font-size: 11px; }
+body.printing .mshift { font-size: 10px; gap: 3px; }
+body.printing .mshift .sn { min-width: 14px; padding-top: 0; }
+body.printing .mcal .pchip { font-size: 10px; padding: 0 4px; gap: 3px; background: none; }
+body.printing .mcal .pchip.empty { background: var(--bad-bg); }
+body.printing .sched th, body.printing .sched td { padding: 2px 6px; font-size: 10px; }
+body.printing .sched .pchip { font-size: 10px; padding: 0 5px; margin: 0 2px 0 0; background: none; }
+body.printing .emp-grid th, body.printing .emp-grid td { padding: 1px; font-size: 9px; min-width: 0; }
+body.printing .emp-grid td .s { min-width: 0; padding: 0 2px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <span class="brand" data-t="Shift Planner">Shift Planner</span>
+    <label class="field"><span data-t="Month">Month</span> <input type="month" id="month"></label>
+    <span id="status"></span>
+    <span class="spacer"></span>
+    <select id="quality" data-t-title="Search effort">
+      <option value="quick" data-t="Quick (~3 s)">Quick (~3 s)</option>
+      <option value="normal" selected data-t="Balanced (~15 s)">Balanced (~15 s)</option>
+      <option value="thorough" data-t="Thorough (~40 s)">Thorough (~40 s)</option>
+    </select>
+    <button class="btn primary" id="solve-btn" data-t="Build schedule">Build schedule</button>
+    <div class="menu-wrap">
+      <button class="btn" id="menu-btn" data-t-aria="Settings" data-t-title="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="menu">☰</button>
+      <div id="menu" role="menu" hidden>
+        <h3 data-t="Settings">Settings</h3>
+        <div class="row"><span data-t="Language">Language</span>
+          <div class="toggles" role="group" data-t-aria="Language">
+            <button class="toggle" data-lang-choice="de" lang="de">Deutsch</button>
+            <button class="toggle" data-lang-choice="en" lang="en">English</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px"><span data-t="History">History</span>
+          <button class="btn" id="undo-btn" data-t-title="Undo the last change (Ctrl+Z)" disabled>↶ <span data-t="Undo last change">Undo last change</span></button>
+          <ol id="history-list" class="history"></ol>
+          <span class="small" data-t="Changes since this page was opened; click one to go back to before it."></span>
+        </div>
+        <div class="row" style="margin-top:10px"><span data-t="Colour theme">Colour theme</span>
+          <div class="toggles" id="theme-toggles" role="group" data-t-aria="Colour theme">
+            <button class="toggle" data-theme-choice="auto" data-t-title="Follow the system setting">◐ <span data-t="Auto">Auto</span></button>
+            <button class="toggle" data-theme-choice="light">☀ <span data-t="Light">Light</span></button>
+            <button class="toggle" data-theme-choice="dark">☾ <span data-t="Dark">Dark</span></button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px"><span data-t="Data">Data</span>
+          <button class="btn" id="backup-btn" data-t-title="Download employees, shifts, availability, rules and all saved schedules as one file">⤓ <span data-t="Export backup">Export backup</span></button>
+          <button class="btn" id="restore-btn" data-t-title="Replace all data with a backup file (or a config.json)">⤒ <span data-t="Import backup">Import backup</span></button>
+          <input type="file" id="restore-file" accept=".json,application/json" hidden>
+          <button class="btn danger" id="delete-all-btn">✕ <span data-t="Delete all data">Delete all data</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="team">1 · <span data-t="Team &amp; shifts">Team &amp; shifts</span></button>
+    <button class="tab" data-tab="avail">2 · <span data-t="Availability">Availability</span> <span class="badge" id="cov-badge" hidden></span></button>
+    <button class="tab" data-tab="schedule">3 · <span data-t="Schedule">Schedule</span></button>
+  </nav>
+</header>
+
+<main>
+  <!-- ======================= TEAM ======================= -->
+  <section id="tab-team">
+    <div class="stepbar no-print"><span class="step" data-t="Step 1 of 3">Step 1 of 3</span>
+      <span data-t="Add your employees and shifts, and check the rules.">Add your employees and shifts, and check the rules.</span><span class="spacer"></span>
+      <button class="btn primary" data-go="avail" data-t="Next: Availability →">Next: Availability →</button></div>
+    <div class="panel">
+      <h2><span data-t="Employees">Employees</span>
+        <label class="opt-toggle"><input type="checkbox" id="more-opts"> <span data-t="More options (min shifts)">More options (min shifts)</span></label></h2>
+      <div class="scroll">
+        <table id="emp-table" class="basic">
+          <thead><tr>
+            <th data-t="Name">Name</th><th data-t="Max shifts / month">Max shifts / month</th><th class="adv" data-t="Min shifts / month">Min shifts / month</th>
+            <th data-t="Contract" data-t-title="Sets the fair share of shifts: full-time 1, part-time ½, mini-job ¼">Contract</th>
+            <th id="night-th" style="text-align:center">Works night shifts</th><th></th>
+          </tr></thead>
+          <tbody id="emp-body"></tbody>
+        </table>
+      </div>
+      <button class="btn" id="add-emp" style="margin-top:10px" data-t="+ Add employee">+ Add employee</button>
+      <p class="hint" data-t="Leave Max shifts blank for no limit. The contract sets each person's fair share of shifts (full-time 1, part-time ½, mini-job ¼). Max working days in a row is set for everyone under Rules. Untick &quot;Works night shifts&quot; for anyone who must never get a night shift; their night shifts are then blocked on the Availability tab."></p>
+    </div>
+
+    <div class="panel">
+      <h2 data-t="Shifts">Shifts</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr id="shift-head"></tr></thead>
+          <tbody id="shift-body"></tbody>
+        </table>
+      </div>
+      <button class="btn" id="add-shift" style="margin-top:10px" data-t="+ Add shift">+ Add shift</button>
+      <p class="hint" data-t="Times are 24-hour, e.g. 06:00 or 22:00. An end time earlier than the start means the shift runs overnight; 00:00 as the end means until midnight. The weekday columns override the staff count for that day (blank = default, 0 = closed)."></p>
+    </div>
+
+    <div class="panel">
+      <h2 data-t="Rules">Rules</h2>
+      <div class="grid2">
+        <label><span data-t="Minimum rest between shifts (hours)"></span><input type="number" min="0" step="0.5" data-rule="min_rest_hours"></label>
+        <label><span data-t="Max working days in a row"></span><input type="number" min="1" data-rule="max_consecutive_days"></label>
+        <label><span data-t="Max shifts per person per day"></span><input type="number" min="1" data-rule="max_shifts_per_day"></label>
+        <label><span data-t="Weekend days (for fair weekend distribution)"></span><span class="toggles" id="weekend-toggles"></span></label>
+        <label><span data-t="Which shifts are night shifts?"></span><span class="toggles" id="night-toggles"></span>
+          <span class="small" data-t="Employees without &quot;Works night shifts&quot; (Employees table above) are never put on these."></span></label>
+      </div>
+      <details style="margin-top:16px">
+        <summary data-t="Optimisation weights (advanced)">Optimisation weights (advanced)</summary>
+        <p class="hint" data-t="Higher = more important. &quot;hard&quot; and &quot;unfilled&quot; should stay far above the others."></p>
+        <div class="grid2" id="weights" style="margin-top:10px"></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ======================= AVAILABILITY ======================= -->
+  <section id="tab-avail" hidden>
+    <div class="stepbar no-print"><span class="step" data-t="Step 2 of 3">Step 2 of 3</span>
+      <span data-t="For each employee, mark the shifts they must, can or must not work."></span><span class="spacer"></span>
+      <button class="btn" data-go="team" data-t="← Back">← Back</button>
+      <button class="btn primary" id="step2-build" data-t="Next: Build schedule →">Next: Build schedule →</button></div>
+    <div class="avail" id="avail-layout">
+      <div class="panel">
+        <h2 data-t="Employees">Employees</h2>
+        <div class="emp-list" id="avail-emps"></div>
+      </div>
+
+      <div class="panel">
+        <h2 id="avail-title"></h2>
+        <div class="view-switch" id="view-switch"></div>
+        <div class="brushes" id="brushes"></div>
+        <p class="level-help"><span><b data-t="Must work">Must work</b>: <span data-t="has to be scheduled"></span></span><span><b data-t="Can work">Can work</b>: <span data-t="happy to work, preferred"></span></span>
+          <span><b data-t="Neutral">Neutral</b>: <span data-t="OK if needed"></span></span><span><b data-t="Must not work">Must not work</b>: <span data-t="never scheduled"></span></span></p>
+        <div class="bulk" id="bulk"></div>
+        <div id="avail-main">
+          <div class="cal-wrap"><div class="cal" id="cal"></div></div>
+          <div class="tgrid-wrap" id="teamgrid"></div>
+        </div>
+        <p class="hint" id="avail-hint"></p>
+      </div>
+
+      <div class="side-right">
+        <div class="panel checks">
+          <h2 data-t="Coverage check">Coverage check</h2>
+          <div id="coverage"></div>
+        </div>
+        <div class="panel checks">
+          <h2 data-t="Staffing needs">Staffing needs</h2>
+          <div id="staffing"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= SCHEDULE ======================= -->
+  <section id="tab-schedule" hidden>
+    <div class="stepbar no-print"><span class="step" data-t="Step 3 of 3">Step 3 of 3</span>
+      <span data-t="Check the schedule. Click any shift to change who works it, then export or print."></span><span class="spacer"></span>
+      <button class="btn" data-go="avail" data-t="← Back">← Back</button></div>
+    <div id="sched-root"></div>
+  </section>
+</main>
+
+<div id="busy"><div class="box"><div class="spinner"></div><div id="busy-text" data-t="Building schedule…">Building schedule…</div><div class="small muted" id="busy-sub"></div></div></div>
+<div id="toast" role="alert"></div>
+<dialog id="pick-dialog" aria-labelledby="pick-title">
+  <form method="dialog">
+    <div class="head">
+      <h2 id="pick-title"></h2>
+      <p id="pick-intro"></p>
+    </div>
+    <div class="body" id="pick-body"></div>
+    <div class="foot">
+      <span class="err" id="pick-err"></span>
+      <button class="btn" value="cancel" formnovalidate data-t="Cancel">Cancel</button>
+      <button class="btn primary" value="ok" id="pick-ok">Apply</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+const LEVELS = [
+  { code: "M", label: "Must work" },
+  { code: "C", label: "Can work" },
+  { code: "N", label: "Neutral" },
+  { code: "X", label: "Must not work" },
+];
+const WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const CONTRACTS = [  // same shares as scheduler.py
+  { value: "full-time", label: "Full-time", share: 1 },
+  { value: "part-time", label: "Part-time", share: 0.5 },
+  { value: "mini-job", label: "Mini-job", share: 0.25 },
+];
+const PRESETS = {
+  quick: { iterations: 40000, restarts: 1 },
+  normal: { iterations: 150000, restarts: 3 },
+  thorough: { iterations: 300000, restarts: 4 },
+};
+const S = {
+  config: null, grid: {}, dates: [], selected: null, brush: "C",
+  result: null, dirty: false, view: "month", highlight: null, defaults: null,
+};
+
+// ---------- language: English texts are the keys, German versions below (server texts: i18n.py) ----------
+let LANG = (() => {
+  try { const l = localStorage.getItem("lang"); if (l === "de" || l === "en") return l; } catch (e) { /* storage unavailable */ }
+  return (navigator.language || "en").toLowerCase().startsWith("de") ? "de" : "en";
+})();
+const LOCALE = () => (LANG === "de" ? "de-DE" : "en-GB");
+const WD_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const wdName = (i) => (LANG === "de" ? WD_DE[i] : WD[i]);  // WD itself stays English: it is also a config key
+const DE = {
+  // header, menu, tabs, steps
+  "Shift Planner": "Schichtplaner", "Month": "Monat", "Undo": "Rückgängig",
+  "Undo the last change (Ctrl+Z)": "Letzte Änderung rückgängig machen (Strg+Z)",
+  "Search effort": "Suchaufwand", "Quick (~3 s)": "Schnell (~3 s)", "Balanced (~15 s)": "Ausgewogen (~15 s)",
+  "Thorough (~40 s)": "Gründlich (~40 s)", "Build schedule": "Dienstplan erstellen", "Settings": "Einstellungen",
+  "Language": "Sprache", "Colour theme": "Farbschema", "Follow the system setting": "Wie im System eingestellt",
+  "Auto": "Auto", "Light": "Hell", "Dark": "Dunkel",
+  "Data": "Daten", "Export backup": "Sicherung exportieren", "Import backup": "Sicherung importieren", "Delete all data": "Alle Daten löschen",
+  "Download employees, shifts, availability, rules and all saved schedules as one file":
+    "Mitarbeitende, Schichten, Verfügbarkeit, Regeln und alle gespeicherten Dienstpläne als eine Datei herunterladen",
+  "Replace all data with a backup file (or a config.json)": "Alle Daten durch eine Sicherungsdatei (oder eine config.json) ersetzen",
+  "Backup failed: {e}": "Sicherung fehlgeschlagen: {e}",
+  "Replace ALL current data (employees, shifts, availability, rules and every saved schedule) with \"{file}\"? This cannot be undone.":
+    "ALLE aktuellen Daten (Mitarbeitende, Schichten, Verfügbarkeit, Regeln und alle gespeicherten Dienstpläne) durch „{file}“ ersetzen? Das kann nicht rückgängig gemacht werden.",
+  "Import failed: {e}": "Import fehlgeschlagen: {e}",
+  "This file is not a backup of the shift planner.": "Diese Datei ist keine Sicherung des Schichtplaners.",
+  "Delete ALL data: every employee, shift, availability, rule and saved schedule? This cannot be undone. Export a backup first if you may need it again.":
+    "ALLE Daten löschen: alle Mitarbeitenden, Schichten, Verfügbarkeiten, Regeln und gespeicherten Dienstpläne? Das kann nicht rückgängig gemacht werden. Vorher eine Sicherung exportieren, falls sie noch gebraucht werden.",
+  "Delete failed: {e}": "Löschen fehlgeschlagen: {e}",
+  "Team & shifts": "Team & Schichten", "Availability": "Verfügbarkeit", "Schedule": "Dienstplan",
+  "Step 1 of 3": "Schritt 1 von 3", "Step 2 of 3": "Schritt 2 von 3", "Step 3 of 3": "Schritt 3 von 3",
+  "Add your employees and shifts, and check the rules.": "Mitarbeitende und Schichten eintragen und die Regeln prüfen.",
+  "Next: Availability →": "Weiter: Verfügbarkeit →", "← Back": "← Zurück", "Next: Build schedule →": "Weiter: Dienstplan erstellen →",
+  "For each employee, mark the shifts they must, can or must not work.":
+    "Für jede Person eintragen, welche Schichten sie arbeiten muss, kann oder nicht darf.",
+  "Check the schedule. Click any shift to change who works it, then export or print.":
+    "Dienstplan prüfen. Auf eine Schicht klicken, um die Besetzung zu ändern, dann exportieren oder drucken.",
+  "Building schedule…": "Dienstplan wird erstellt…", "Cancel": "Abbrechen", "Apply": "Übernehmen",
+  // team tab
+  "Employees": "Mitarbeitende", "More options (min shifts)": "Weitere Optionen (Min. Schichten)", "Name": "Name",
+  "Max shifts / month": "Max. Schichten / Monat", "Min shifts / month": "Min. Schichten / Monat", "Contract": "Vertrag",
+  "Sets the fair share of shifts: full-time 1, part-time ½, mini-job ¼": "Bestimmt den fairen Anteil an Schichten: Vollzeit 1, Teilzeit ½, Minijob ¼",
+  "Works night shifts": "Arbeitet Nachtschichten", "Works night shifts ({list})": "Arbeitet Nachtschichten ({list})",
+  "+ Add employee": "+ Person hinzufügen", "+ Add shift": "+ Schicht hinzufügen",
+  "Leave Max shifts blank for no limit. The contract sets each person's fair share of shifts (full-time 1, part-time ½, mini-job ¼). Max working days in a row is set for everyone under Rules. Untick \"Works night shifts\" for anyone who must never get a night shift; their night shifts are then blocked on the Availability tab.":
+    "Max. Schichten leer lassen = keine Grenze. Der Vertrag bestimmt den fairen Anteil an Schichten (Vollzeit 1, Teilzeit ½, Minijob ¼). Die maximale Zahl an Arbeitstagen am Stück gilt für alle und steht unter Regeln. „Arbeitet Nachtschichten“ abwählen, wenn jemand nie eine Nachtschicht bekommen darf; die Nachtschichten dieser Person sind dann im Tab Verfügbarkeit gesperrt.",
+  "Full-time": "Vollzeit", "Part-time": "Teilzeit", "Mini-job": "Minijob",
+  "no limit": "keine Grenze", "{name}: contract": "{name}: Vertrag", "{name} works night shifts": "{name} arbeitet Nachtschichten",
+  "Ticked: {name} can be scheduled on {list}": "Angehakt: {name} kann für {list} eingeteilt werden",
+  "No night shift chosen under Rules": "Unter Regeln ist keine Nachtschicht gewählt",
+  "Remove": "Entfernen", "Remove {name}": "{name} entfernen", "Move up": "Nach oben", "Move down": "Nach unten",
+  "Move {name} up": "{name} nach oben", "Move {name} down": "{name} nach unten",
+  "Shifts": "Schichten", "Start": "Beginn", "End": "Ende", "Length": "Dauer", "Staff": "Besetzung",
+  "Times are 24-hour, e.g. 06:00 or 22:00. An end time earlier than the start means the shift runs overnight; 00:00 as the end means until midnight. The weekday columns override the staff count for that day (blank = default, 0 = closed).":
+    "Zeiten im 24-Stunden-Format, z. B. 06:00 oder 22:00. Endet eine Schicht früher als sie beginnt, geht sie über Mitternacht; 00:00 als Ende heißt bis Mitternacht. Die Wochentags-Spalten ändern die Besetzung an diesem Tag (leer = Standard, 0 = geschlossen).",
+  "Rules": "Regeln", "Minimum rest between shifts (hours)": "Mindestruhezeit zwischen Schichten (Stunden)",
+  "Max working days in a row": "Max. Arbeitstage am Stück", "Max shifts per person per day": "Max. Schichten pro Person und Tag",
+  "Weekend days (for fair weekend distribution)": "Wochenendtage (für die faire Verteilung der Wochenenden)",
+  "Which shifts are night shifts?": "Welche Schichten sind Nachtschichten?",
+  "Employees without \"Works night shifts\" (Employees table above) are never put on these.":
+    "Personen ohne „Arbeitet Nachtschichten“ (Tabelle oben) werden hier nie eingeteilt.",
+  "Add shifts first.": "Zuerst Schichten anlegen.",
+  "Optimisation weights (advanced)": "Gewichtung der Optimierung (für Fortgeschrittene)",
+  "Higher = more important. \"hard\" and \"unfilled\" should stay far above the others.":
+    "Höher = wichtiger. „Harte Regeln“ und „Unbesetzter Platz“ sollten weit über den anderen liegen.",
+  "hard": "Harte Regeln", "unfilled": "Unbesetzter Platz", "can": "Kann arbeiten", "neutral": "Neutral",
+  "fairness": "Fairness", "weekend fairness": "Wochenend-Fairness", "below min shifts": "Unter Min.-Schichten",
+  "over consecutive": "Über Tage am Stück",
+  "\"{v}\" is not a valid time. Use 24-hour HH:MM, e.g. 06:00 or 22:00.":
+    "„{v}“ ist keine gültige Uhrzeit. Bitte 24-Stunden-Format HH:MM verwenden, z. B. 06:00 oder 22:00.",
+  "{name} start time": "{name} Beginn", "{name} end time": "{name} Ende",
+  " (overnight)": " (über Nacht)", "{len}: check the times": "{len}: Zeiten prüfen",
+  "Longer than 12 hours. Is the start or end time wrong?": "Länger als 12 Stunden. Stimmt Beginn oder Ende nicht?",
+  "New employee": "Neue Person", "Shift": "Schicht",
+  "There is already an employee called \"{name}\".": "Es gibt schon eine Person namens „{name}“.",
+  "Name cannot be empty.": "Der Name darf nicht leer sein.",
+  "Remove {name} and their availability?": "{name} mit der eingetragenen Verfügbarkeit entfernen?",
+  "There is already a shift called \"{name}\".": "Es gibt schon eine Schicht namens „{name}“.",
+  "Remove the {name} shift?": "Schicht „{name}“ entfernen?",
+  // availability tab
+  "Must work": "Muss arbeiten", "Can work": "Kann arbeiten", "Neutral": "Neutral", "Must not work": "Darf nicht arbeiten",
+  "has to be scheduled": "wird auf jeden Fall eingeteilt", "happy to work, preferred": "arbeitet gern, wird bevorzugt",
+  "OK if needed": "falls nötig", "never scheduled": "wird nie eingeteilt",
+  "no nights": "keine Nächte", "Add employees on the Team tab first.": "Zuerst im Tab Team Personen anlegen.",
+  "One employee": "Eine Person", "Whole team, one shift": "Ganzes Team, eine Schicht",
+  "Pick a level, then click or drag across shifts. Click a date to set the whole day, or a weekday heading to set that weekday all month.":
+    "Stufe wählen, dann Schichten anklicken oder darüberziehen. Ein Datum setzt den ganzen Tag, eine Wochentags-Überschrift diesen Wochentag im ganzen Monat.",
+  "Set \"{level}\" for:": "„{level}“ setzen für:", "Whole month": "Ganzen Monat", "Every {shift}": "Alle „{shift}“",
+  "Set every {day} to \"{level}\"": "Jeden {day} auf „{level}“ setzen", "Set the whole day to \"{level}\"": "Ganzen Tag auf „{level}“ setzen",
+  "{shift} (closed)": "{shift} (geschlossen)", "{name} does not work night shifts": "{name} arbeitet keine Nachtschichten",
+  "Whole team · {month}": "Ganzes Team · {month}",
+  "Pick a level, then click or drag across the grid. Click a name to set the whole row, or a day to set everyone that day.":
+    "Stufe wählen, dann Felder anklicken oder darüberziehen. Ein Name setzt die ganze Zeile, ein Tag alle an diesem Tag.",
+  "Shift:": "Schicht:", "Set everyone on {date} to \"{level}\"": "Alle am {date} auf „{level}“ setzen",
+  "Set all of {name}'s {shift} shifts to \"{level}\"": "Alle „{shift}“ von {name} auf „{level}“ setzen",
+  "Closed": "Geschlossen", "Available / needed": "Verfügbar / benötigt", "{a} available, {n} needed": "{a} verfügbar, {n} benötigt",
+  "Coverage check": "Besetzungsprüfung",
+  "{where}: {a} available, {n} needed": "{where}: {a} verfügbar, {n} benötigt",
+  "{where}: {m} \"must work\" requests for {pos}": "{where}: {m}× „Muss arbeiten“ für {pos}",
+  "{d} shift positions to fill this month": "{d} Schichtplätze in diesem Monat zu besetzen",
+  " · combined max capacity {c}": " · zusammen höchstens {c} Schichten möglich",
+  "Max shifts add up to {c}, fewer than the {d} needed. Some slots will stay empty.":
+    "Die Max.-Schichten ergeben zusammen {c}, weniger als die benötigten {d}. Einige Plätze bleiben leer.",
+  "Capacity is very tight; the schedule may need rule violations.": "Die Kapazität ist sehr knapp; der Plan kommt eventuell nicht ohne Regelverstöße aus.",
+  "Every shift has enough available people.": "Jede Schicht hat genug verfügbare Personen.",
+  "{n} slot cannot be covered as requested.": "{n} Platz kann nicht wie gewünscht besetzt werden.",
+  "{n} slots cannot be covered as requested.": "{n} Plätze können nicht wie gewünscht besetzt werden.",
+  "Choose…": "Auswählen…", "…and {n} more": "…und {n} weitere",
+  "Staffing needs": "Personalbedarf", "Shifts needed": "Benötigte Schichten", "Team can work": "Team kann leisten",
+  "Enough staff: the team can cover every shift this month.": "Genug Personal: das Team kann in diesem Monat jede Schicht abdecken.",
+  "About {n} shift is missing.": "Es fehlt etwa {n} Schicht.", "About {n} shifts are missing.": "Es fehlen etwa {n} Schichten.",
+  "That is roughly {ft} more full-time, {pt} part-time or {mj} mini-job employees.":
+    "Das sind ungefähr {ft} Vollzeit-, {pt} Teilzeit- oder {mj} Minijob-Kräfte mehr.",
+  "Needed": "Benötigt", "Available / day": "Verfügbar / Tag", "Missing": "Fehlt",
+  "Average number of people available per day": "Durchschnittlich verfügbare Personen pro Tag",
+  "{shift}: {places} cannot be filled ({days}) → at least {people} for {shift} on these days.":
+    "{shift}: {places} nicht besetzbar ({days}) → mindestens {people} für {shift} an diesen Tagen.",
+  "{n} more person": "{n} weitere Person", "{n} more people": "{n} weitere Personen", "every {day}": "jeden {day}",
+  "The team's maximum shifts add up to less than the month needs ({c} of {d}): raise Max shifts or add staff.":
+    "Die Max.-Schichten des Teams reichen für den Monat nicht ({c} von {d}): Max. Schichten erhöhen oder Personal einstellen.",
+  "Where people are missing": "Wo Personal fehlt",
+  "Estimate from availability and limits; rest times between shifts can still leave a few gaps when the schedule is built.":
+    "Schätzung aus Verfügbarkeit und Grenzen; Ruhezeiten zwischen Schichten können beim Erstellen noch einzelne Lücken erzeugen.",
+  // schedule tab
+  "No schedule yet": "Noch kein Dienstplan", "Check the team and availability, then build the schedule.": "Team und Verfügbarkeit prüfen, dann den Dienstplan erstellen.",
+  "Inputs changed since this schedule was built. ": "Die Eingaben haben sich seit dem Erstellen geändert. ", "Rebuild": "Neu erstellen",
+  "{n} problem to check": "{n} Problem zu prüfen", "{n} problems to check": "{n} Probleme zu prüfen",
+  "All hard rules satisfied: every shift is staffed and every must / must-not request is honoured.":
+    "Alle harten Regeln erfüllt: jede Schicht ist besetzt und alle Muss-/Darf-nicht-Wünsche sind berücksichtigt.",
+  "By day": "Nach Tag", "By employee": "Nach Person", "Score {s} (lower is better)": "Bewertung {s} (niedriger ist besser)",
+  "Changed by hand": "Von Hand geändert", "Built in {s} s": "Erstellt in {s} s", "Export to Excel": "Nach Excel exportieren",
+  "CSV by day": "CSV nach Tag", "CSV by employee": "CSV nach Person", "Print": "Drucken",
+  "Schedule · {month} ({n} days)": "Dienstplan · {month} ({n} Tage)", "Per employee": "Pro Person",
+  "Fair share accounts for the contract and availability. Click a row to highlight that person in the schedule.":
+    "Der faire Anteil berücksichtigt Vertrag und Verfügbarkeit. Eine Zeile anklicken, um die Person im Plan hervorzuheben.",
+  "Click to change who works this shift": "Klicken, um die Besetzung dieser Schicht zu ändern", "Unfilled": "Unbesetzt",
+  " · click a shift to change who works it · click a name in the table below to highlight their shifts":
+    " · Schicht anklicken, um die Besetzung zu ändern · Namen in der Tabelle unten anklicken, um die Schichten hervorzuheben",
+  "Date": "Datum", "Employee": "Person", "Fair share": "Fairer Anteil", "Weekend": "Wochenende", "Weekend share": "Anteil Wochenende",
+  "date": "datum", "weekday": "wochentag", "shift": "schicht", "time": "zeit", "employees": "personen", "(EMPTY)": "(LEER)",
+  "employee": "person", "total": "summe",
+  "Excel export failed: {e}": "Excel-Export fehlgeschlagen: {e}",
+  // dialogs
+  "Check the highlighted shift.": "Bitte die markierte Schicht prüfen.", "Check the highlighted shifts.": "Bitte die markierten Schichten prüfen.",
+  "Too many \"must work\" requests": "Zu viele „Muss arbeiten“",
+  "These shifts have more employees who must work than there are positions. Choose who keeps the shift; the others are changed to \"Can work\" for that shift.":
+    "Bei diesen Schichten müssen mehr Personen arbeiten, als es Plätze gibt. Wählen, wer die Schicht bekommt; die anderen werden für diese Schicht auf „Kann arbeiten“ gesetzt.",
+  "{when} · {shift}: {pos}, {m} must work": "{when} · {shift}: {pos}, {m} müssen arbeiten",
+  "{n} position": "{n} Platz", "{n} positions": "{n} Plätze", "{n} place": "{n} Platz", "{n} places": "{n} Plätze",
+  "Choose {n}.": "{n} auswählen.",
+  "Updated {n} shift: the others are now \"Can work\".": "{n} Schicht geändert: die anderen sind jetzt „Kann arbeiten“.",
+  "Updated {n} shifts: the others are now \"Can work\".": "{n} Schichten geändert: die anderen sind jetzt „Kann arbeiten“.",
+  "Apply and continue": "Übernehmen und weiter", "Continue": "Weiter", "doesn't work nights": "arbeitet keine Nächte",
+  "{when} · {shift}: {pos} without anyone": "{when} · {shift}: {pos} ohne Besetzung",
+  "Choose up to {n}, or none to leave it unfilled.": "Bis zu {n} auswählen oder keine, dann bleibt der Platz unbesetzt.",
+  "Choose up to {n}, or none to leave them unfilled.": "Bis zu {n} auswählen oder keine, dann bleiben die Plätze unbesetzt.",
+  "No one available for some shifts": "Für einige Schichten ist niemand verfügbar",
+  "Everyone else has \"Must not work\" for these shifts. Choose who should cover them (they are set to \"Must work\" for that shift), or leave the shift unfilled.":
+    "Alle anderen haben für diese Schichten „Darf nicht arbeiten“. Wählen, wer sie übernehmen soll (wird für diese Schicht auf „Muss arbeiten“ gesetzt), oder die Schicht unbesetzt lassen.",
+  "marked must not work": "„darf nicht arbeiten“ eingetragen",
+  "{n} person set to \"Must work\".": "{n} Person auf „Muss arbeiten“ gesetzt.", "{n} people set to \"Must work\".": "{n} Personen auf „Muss arbeiten“ gesetzt.",
+  "No one could be scheduled": "Niemand konnte eingeteilt werden",
+  "The schedule leaves these shifts empty. Choose who should cover them (set to \"Must work\" for that shift) and the schedule is rebuilt. The note after a name says why they were not used.":
+    "Im Plan bleiben diese Schichten leer. Wählen, wer sie übernehmen soll (wird für diese Schicht auf „Muss arbeiten“ gesetzt); der Plan wird dann neu erstellt. Die Notiz hinter einem Namen erklärt, warum die Person nicht eingeteilt wurde.",
+  "Apply and rebuild": "Übernehmen und neu erstellen", "works {list} that day": "arbeitet an dem Tag {list}",
+  "at max {n} shifts": "hat schon max. {n} Schichten",
+  "The team, shifts or availability changed since this schedule was built. Build it again, then change shifts by hand.":
+    "Team, Schichten oder Verfügbarkeit haben sich seit dem Erstellen geändert. Bitte den Plan neu erstellen und dann von Hand ändern.",
+  "must work": "muss arbeiten", "can work": "kann arbeiten", "must not work": "darf nicht arbeiten",
+  "already has {n} shifts (max)": "hat schon {n} Schichten (max.)",
+  "Choose who works this shift. The note after each name shows their availability and other shifts that day. Rules are checked again when you save.":
+    "Wählen, wer diese Schicht arbeitet. Die Notiz hinter jedem Namen zeigt Verfügbarkeit und andere Schichten an dem Tag. Beim Speichern werden die Regeln erneut geprüft.",
+  "Save changes": "Änderungen speichern", "Choose up to {n}. Places left empty stay unfilled.": "Bis zu {n} auswählen. Leere Plätze bleiben unbesetzt.",
+  "Saved. {n} problem to check, see the list above.": "Gespeichert. {n} Problem zu prüfen, siehe Liste oben.",
+  "Saved. {n} problems to check, see the list above.": "Gespeichert. {n} Probleme zu prüfen, siehe Liste oben.",
+  "Saved. No rule problems.": "Gespeichert. Keine Regelprobleme.",
+  "Add at least one employee and one shift first.": "Bitte zuerst mindestens eine Person und eine Schicht anlegen.",
+  // status, loading, saving, errors
+  "Nothing to undo.": "Nichts rückgängig zu machen.", "Undone.": "Rückgängig gemacht.",
+  "History": "Verlauf", "Undo last change": "Letzte Änderung rückgängig", "No changes yet.": "Noch keine Änderungen.",
+  "Changes since this page was opened; click one to go back to before it.":
+    "Änderungen seit dem Öffnen der Seite; anklicken, um zum Stand davor zurückzugehen.",
+  "Go back to before this change": "Zum Stand vor dieser Änderung zurück", "Undo the last {n} changes?": "Die letzten {n} Änderungen rückgängig machen?",
+  "Change": "Änderung", "{name}: max shifts": "{name}: Max. Schichten", "{name}: min shifts": "{name}: Min. Schichten",
+  "{name}: works night shifts": "{name}: arbeitet Nachtschichten", "{name}: no night shifts": "{name}: keine Nachtschichten",
+  "Shift {name}: staff": "Schicht {name}: Besetzung", "Shift {name}: times": "Schicht {name}: Zeiten",
+  "Weekend days changed": "Wochenendtage geändert", "Night shifts changed": "Nachtschichten geändert",
+  "Weights changed": "Gewichtung geändert", "Rules changed": "Regeln geändert",
+  "Added employee {name}": "Person {name} hinzugefügt", "Removed employee {name}": "Person {name} entfernt",
+  "Renamed {old} → {new}": "{old} umbenannt in {new}", "Added shift {name}": "Schicht {name} hinzugefügt",
+  "Removed shift {name}": "Schicht {name} entfernt", "Moved shift {name}": "Schicht {name} verschoben",
+  "Availability of {name}": "Verfügbarkeit von {name}", "Availability of the team: {shift}": "Verfügbarkeit des Teams: {shift}",
+  "Month changed to {m}": "Monat gewechselt zu {m}", "Settled \"must work\" conflicts": "„Muss arbeiten“-Konflikte geklärt",
+  "Covered shifts without anyone": "Schichten ohne Besetzung zugeteilt", "Built the schedule": "Dienstplan erstellt",
+  "Changed {when} {shift} by hand": "{when} {shift} von Hand geändert", "Contracts taken over from FTE": "Verträge aus FTE übernommen",
+  "Not saved: {e}": "Nicht gespeichert: {e}", "Saving…": "Speichert…",
+  "Loaded {from} · changes save automatically to {to}": "Geladen: {from} · Änderungen werden automatisch in {to} gespeichert",
+  "All changes saved to {to}": "Alle Änderungen in {to} gespeichert",
+  "The program was updated. ": "Das Programm wurde aktualisiert. ",
+  "Please restart it: in the terminal press Ctrl+C, run python3 ui.py again, then reload this page. Until then schedules are built with the old version.":
+    "Bitte neu starten: im Terminal Strg+C drücken, python3 ui.py erneut ausführen und diese Seite neu laden. Bis dahin werden Dienstpläne mit der alten Version erstellt.",
+  "FTE is replaced by the contract: {list}.": "FTE wurde durch den Vertrag ersetzt: {list}.",
+  "Could not load config: {e}": "Konfiguration konnte nicht geladen werden: {e}",
+  "Could not open the saved schedule: {e}": "Gespeicherter Dienstplan konnte nicht geöffnet werden: {e}",
+  "Could not save the schedule: {e}": "Dienstplan konnte nicht gespeichert werden: {e}",
+  "\"{m}\" is not a month. Use YYYY-MM, e.g. 2026-11.": "„{m}“ ist kein Monat. Bitte JJJJ-MM verwenden, z. B. 2026-11.",
+  "Month changed: weekly availability patterns were carried over, dated exceptions were dropped.":
+    "Monat gewechselt: wöchentliche Verfügbarkeiten wurden übernommen, Ausnahmen mit Datum entfernt.",
+  "Something went wrong ({id}). It was logged; reloading the page usually helps.":
+    "Etwas ist schiefgelaufen ({id}). Der Fehler wurde protokolliert; Neuladen der Seite hilft meist.",
+};
+// t("text {x}", {x}) translates and fills in placeholders; tn picks the singular or plural text first
+function t(text, vars) {
+  let out = LANG === "de" && DE[text] != null ? DE[text] : text;
+  if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+  return out;
+}
+const tn = (n, one, many, vars = {}) => t(n === 1 ? one : many, { n, ...vars });
+const lvl = (code) => t(LEVELS.find((l) => l.code === code).label);
+// texts written in the HTML itself carry their English key in data-t / data-t-title / data-t-aria
+function applyStaticTexts() {
+  document.documentElement.lang = LANG;
+  document.title = t("Shift Planner");
+  document.querySelectorAll("[data-t]").forEach((n) => (n.textContent = t(n.dataset.t)));
+  document.querySelectorAll("[data-t-title]").forEach((n) => (n.title = t(n.dataset.tTitle)));
+  document.querySelectorAll("[data-t-aria]").forEach((n) => n.setAttribute("aria-label", t(n.dataset.tAria)));
+  document.querySelectorAll("[data-lang-choice]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.langChoice === LANG);
+    b.setAttribute("aria-pressed", String(b.dataset.langChoice === LANG));
+  });
+}
+
+// ---------- unexpected errors in this page are logged by the server (logs/errors.jsonl) ----------
+let reported = 0;
+function reportError(message, stack, where) {
+  if (++reported > 10) return;  // do not flood the log if something loops
+  fetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, stack, where }) })
+    .then((r) => r.json()).then((j) => j.id && toast(t("Something went wrong ({id}). It was logged; reloading the page usually helps.", { id: j.id })))
+    .catch(() => {});
+}
+window.addEventListener("error", (e) => reportError(e.message, e.error && e.error.stack, `${e.filename}:${e.lineno}`));
+window.addEventListener("unhandledrejection", (e) => reportError(String((e.reason && e.reason.message) || e.reason), e.reason && e.reason.stack, "promise"));
+
+// ---------- helpers ----------
+const $ = (sel, root = document) => root.querySelector(sel);
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k);
+  return n;
+}
+async function api(path, body) {
+  const opts = body === undefined ? { headers: { "X-Lang": LANG } }
+    : { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify(body) };
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({ error: r.statusText }));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+let toastTimer;
+function toast(msg, info = false) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = info ? "info" : "";
+  t.style.display = "block";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.style.display = "none"), info ? 2500 : 6000);
+}
+function makeDates(month) {
+  const [y, m] = month.split("-").map(Number);
+  const n = new Date(y, m, 0).getDate();
+  return Array.from({ length: n }, (_, i) => new Date(y, m - 1, i + 1));
+}
+const wdOf = (d) => (d.getDay() + 6) % 7;
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const isWeekend = (d) => S.config.rules.weekend.some((w) => WD.indexOf(w.slice(0, 3)) === wdOf(d));
+const fmt1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
+
+function staffNeed(shift, date) {
+  const byWd = shift.staff_by_weekday || {};
+  const key = Object.keys(byWd).find((k) => WD.indexOf(k.slice(0, 3)) === wdOf(date));
+  return key !== undefined ? Number(byWd[key]) : Number(shift.staff ?? 1);
+}
+
+// same rule as scheduler.py: explicit "night" flag, else crossing midnight or named "night"
+// rules.night_shifts (chosen in Rules) decides; older configs without it fall back to the automatic rule
+const autoNight = (sh) => sh.night ?? ((sh.end < sh.start && sh.end > "00:00") || /night|nacht/i.test(sh.name));
+const isNightShift = (sh) => Array.isArray(S.config.rules.night_shifts) ? S.config.rules.night_shifts.includes(sh.name) : autoNight(sh);
+const worksNights = (emp) => emp.night_shifts !== false;
+function effLevel(emp, d, s) {
+  if (!worksNights(emp) && isNightShift(S.config.shifts[s])) return "X";
+  return S.grid[emp.name]?.[d]?.[s];
+}
+
+// fingerprint of all inputs; a schedule is out of date when the inputs no longer match it
+function fingerprint() {
+  const t = JSON.stringify(payload());
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+  return `${h.toString(36)}:${t.length}`;
+}
+const isStale = () => !!S.result && S.result.fingerprint !== fingerprint();
+
+function changed({ structure = false } = {}) {
+  markEdited();
+  if (structure) renderAvail(); else renderCoverage();
+}
+// ---------- undo: snapshots of all inputs (and the schedule), edits within 0.8 s count as one step ----------
+const undoStack = [];  // entries { state (before the change), label: { key, vars }, time }
+let nextLabel = null;
+// describe the change that is about to be recorded (shown in the History list, translated when shown)
+function label(key, vars = {}) { nextLabel = { key, vars }; }
+let committed = null, groupOpen = false, groupTimer = null;
+const snapshot = () => JSON.stringify({ config: S.config, grid: S.grid, result: S.result });
+// a separate action (build, hand edit, add/remove/move, a new paint stroke) must not be merged with
+// the typing just before it: close the open group first, so it gets its own undo step
+function beginStep() {
+  if (!groupOpen) return;
+  clearTimeout(groupTimer);
+  groupOpen = false;
+  committed = snapshot();
+}
+function recordUndo() {
+  if (committed === null) return;
+  if (!groupOpen) {
+    undoStack.push({ state: committed, label: nextLabel || { key: "Change", vars: {} }, time: Date.now() });
+    if (undoStack.length > 50) undoStack.shift();
+    groupOpen = true;
+  }
+  clearTimeout(groupTimer);
+  groupTimer = setTimeout(() => { groupOpen = false; committed = snapshot(); }, 800);
+  nextLabel = null;
+  renderHistory();
+}
+// go back to before history entry i (undoes it and every later change)
+function undoTo(i) {
+  const n = undoStack.length - i;
+  if (n > 1 && !confirm(t("Undo the last {n} changes?", { n }))) return;
+  undoStack.length = i + 1;  // the entry itself is undone by undo()
+  undo();
+}
+function renderHistory() {
+  const list = $("#history-list");
+  $("#undo-btn").disabled = !undoStack.length;
+  if (!undoStack.length) return list.replaceChildren(el("li", { class: "empty", text: t("No changes yet.") }));
+  const time = (ms) => new Date(ms).toLocaleTimeString(LOCALE(), { hour: "2-digit", minute: "2-digit" });
+  list.replaceChildren(...undoStack.map((h, i) => el("li", {},
+    el("button", { title: t("Go back to before this change"), onclick: () => undoTo(i) },
+      el("span", { class: "when", text: time(h.time) }), el("span", { text: t(h.label.key, h.label.vars) })))).reverse());
+}
+async function undo() {
+  clearTimeout(groupTimer);
+  groupOpen = false;
+  const entry = undoStack.pop();
+  renderHistory();
+  if (!entry) return toast(t("Nothing to undo."), true);
+  const prev = entry.state;
+  const st = JSON.parse(prev);
+  const monthChanged = st.config.month !== S.config.month;
+  const resultChanged = JSON.stringify(st.result) !== JSON.stringify(S.result);
+  S.config = st.config;
+  S.grid = st.grid;
+  S.result = st.result;
+  committed = prev;
+  S.dates = makeDates(S.config.month);
+  $("#month").value = S.config.month;
+  if (!S.config.employees.some((e) => e.name === S.selected)) S.selected = S.config.employees[0]?.name ?? null;
+  S.dirty = true;
+  S.edits = (S.edits || 0) + 1;
+  scheduleSave();
+  updateStatus();
+  renderAll();
+  if (resultChanged && S.result && !monthChanged) saveSchedule();
+  toast(t("Undone."), true);
+}
+
+function markEdited() {
+  recordUndo();
+  S.dirty = true;
+  S.edits = (S.edits || 0) + 1;
+  scheduleSave();
+  updateStatus();
+}
+function updateStatus() {
+  const st = $("#status");
+  if (S.saveError) { st.textContent = t("Not saved: {e}", { e: S.saveError }); st.className = "error"; return; }
+  const base = S.savedTo ? t("All changes saved to {to}", { to: S.savedTo })
+    : S.loadedFrom ? t("Loaded {from} · changes save automatically to {to}", { from: S.loadedFrom, to: S.saveTo }) : "";
+  st.textContent = S.dirty ? t("Saving…") : base;
+  st.className = S.dirty ? "dirty" : "";
+}
+
+// ---------- load ----------
+async function init() {
+  try {
+    const { config, loaded_from, save_to, defaults, restart_needed } = await api("/api/config");
+    if (restart_needed) {
+      // the program files changed after ui.py was started: results would come from the old code
+      document.querySelector("main").prepend(el("div", { class: "note bad", style: "font-size:14px" },
+        el("strong", { "data-t": "The program was updated. ", text: t("The program was updated. ") }),
+        el("span", { "data-t": "Please restart it: in the terminal press Ctrl+C, run python3 ui.py again, then reload this page. Until then schedules are built with the old version.",
+          text: t("Please restart it: in the terminal press Ctrl+C, run python3 ui.py again, then reload this page. Until then schedules are built with the old version.") })));
+    }
+    S.defaults = defaults;
+    config.employees = (config.employees || []).map((e) => (typeof e === "string" ? { name: e } : e));
+    config.employees.forEach((e) => delete e.max_consecutive_days);  // one limit for all, under Rules
+    const migrated = config.employees.filter((e) => e.fte != null);
+    for (const e of migrated) {  // FTE numbers are replaced by the nearest contract (same rule as scheduler.py)
+      if (!e.contract) e.contract = e.fte >= 0.75 ? "full-time" : e.fte >= 0.375 ? "part-time" : "mini-job";
+      delete e.fte;
+    }
+    config.shifts = config.shifts || [];
+    config.rules = { ...defaults.rules, ...(config.rules || {}) };
+    config.weights = { ...defaults.weights, ...(config.weights || {}) };
+    if (!config.month) {
+      const n = new Date(); n.setMonth(n.getMonth() + 1);
+      config.month = iso(n).slice(0, 7);
+    }
+    // an empty config (e.g. after Delete all data) has nothing to resolve: one empty row per employee
+    const res = config.employees.length && config.shifts.length ? await api("/api/resolve", { config, month: config.month })
+      : { month: config.month, grid: Object.fromEntries(config.employees.map((e) => [e.name, makeDates(config.month).map(() => config.shifts.map(() => "N"))])) };
+    delete config.availability;
+    delete config.availability_csv;
+    S.config = config;
+    S.grid = res.grid;
+    S.dates = makeDates(res.month);
+    S.selected = config.employees[0]?.name ?? null;
+    S.saveTo = save_to;
+    S.loadedFrom = loaded_from;
+    updateStatus();
+    renderAll();
+    await loadSchedule(res.month);
+    committed = snapshot();
+    if (migrated.length) {
+      label("Contracts taken over from FTE");
+      markEdited();
+      toast(t("FTE is replaced by the contract: {list}.", { list: migrated.map((e) => `${e.name} → ${t(CONTRACTS.find((c) => c.value === e.contract).label)}`).join(", ") }), true);
+    }
+    const tab = location.hash.slice(1);
+    if (["team", "avail", "schedule"].includes(tab)) switchTab(tab);
+  } catch (e) {
+    toast(t("Could not load config: {e}", { e: e.message }));
+  }
+}
+
+// the last schedule of each month is kept in schedule_YYYY-MM.json next to the config
+async function loadSchedule(month) {
+  try {
+    const { result } = await api(`/api/schedule?month=${encodeURIComponent(month)}`);
+    if (S.config.month !== month) return;  // the month changed again meanwhile
+    S.result = result;
+    S.highlight = null;
+    renderSchedule();
+  } catch (e) {
+    toast(t("Could not open the saved schedule: {e}", { e: e.message }));
+  }
+}
+async function saveSchedule() {
+  try {
+    await api("/api/schedule", { result: S.result });
+  } catch (e) {
+    toast(t("Could not save the schedule: {e}", { e: e.message }));
+  }
+}
+
+function payload() {
+  return { config: S.config, grid: S.grid };
+}
+
+async function changeMonth(month) {
+  if (!month || month === S.config.month) return;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    $("#month").value = S.config.month;
+    return toast(t("\"{m}\" is not a month. Use YYYY-MM, e.g. 2026-11.", { m: month }));
+  }
+  try {
+    if (S.config.employees.length && S.config.shifts.length) {
+      // the server folds the current grid into weekly patterns and re-applies them to the new month
+      const res = await api("/api/resolve", { ...payload(), month });
+      S.grid = res.grid;
+    } else {
+      // nothing to carry over; keep one (possibly empty) row per employee so later edits line up
+      S.grid = Object.fromEntries(S.config.employees.map((e) => [e.name, makeDates(month).map(() => S.config.shifts.map(() => "N"))]));
+    }
+    S.config.month = month;
+    S.dates = makeDates(month);
+    S.result = null;
+    label("Month changed to {m}", { m: monthLabel(month) });
+    changed({ structure: true });
+    await loadSchedule(month);
+    toast(t("Month changed: weekly availability patterns were carried over, dated exceptions were dropped."), true);
+  } catch (e) {
+    $("#month").value = S.config.month;
+    toast(e.message);
+  }
+}
+
+// ---------- team tab ----------
+function numInput(value, onset, { placeholder = "", step = 1, min = 0, cls = null } = {}) {
+  return el("input", {
+    type: "number", step, min, placeholder, class: cls, value: value ?? "",
+    oninput: (ev) => { const v = ev.target.value.trim(); onset(v === "" ? null : Number(v)); },
+  });
+}
+function setOpt(obj, key, v) { if (v == null) delete obj[key]; else obj[key] = v; changed(); }
+
+function renderTeam() {
+  const nn = nightNames();
+  $("#night-th").textContent = nn.length ? t("Works night shifts ({list})", { list: nn.join(", ") }) : t("Works night shifts");
+  const eb = $("#emp-body");
+  eb.replaceChildren();
+  S.config.employees.forEach((emp, i) => {
+    eb.append(el("tr", {},
+      el("td", {}, el("input", { type: "text", value: emp.name, onchange: (ev) => renameEmployee(i, ev.target) })),
+      el("td", {}, numInput(emp.max_shifts, (v) => { label("{name}: max shifts", { name: emp.name }); setOpt(emp, "max_shifts", v); }, { placeholder: t("no limit") })),
+      el("td", { class: "adv" }, numInput(emp.min_shifts, (v) => { label("{name}: min shifts", { name: emp.name }); setOpt(emp, "min_shifts", v); }, { placeholder: "0" })),
+      el("td", {}, el("select", { "aria-label": t("{name}: contract", { name: emp.name }), onchange: (ev) => { label("{name}: contract", { name: emp.name }); emp.contract = ev.target.value; changed(); } },
+        CONTRACTS.map((c) => el("option", { value: c.value, text: t(c.label), selected: (emp.contract || "full-time") === c.value })))),
+      el("td", { class: "night-cell" }, el("input", {
+        type: "checkbox", checked: worksNights(emp), disabled: !nightNames().length, "aria-label": t("{name} works night shifts", { name: emp.name }),
+        title: nightNames().length ? t("Ticked: {name} can be scheduled on {list}", { name: emp.name, list: nightNames().join(", ") }) : t("No night shift chosen under Rules"),
+        onchange: (ev) => {
+          label(ev.target.checked ? "{name}: works night shifts" : "{name}: no night shifts", { name: emp.name });
+          if (ev.target.checked) delete emp.night_shifts; else emp.night_shifts = false;
+          changed({ structure: true });
+        },
+      })),
+      el("td", {}, el("button", { class: "btn ghost", title: t("Remove"), "aria-label": t("Remove {name}", { name: emp.name }), text: "✕", onclick: () => removeEmployee(i) })),
+    ));
+  });
+
+  const sh = $("#shift-head");
+  sh.replaceChildren(...["Name", "Start", "End", "Length", "Staff"].map((x) => el("th", { text: t(x) })),
+    ...WD.map((w, i) => el("th", { text: wdName(i) })), el("th"));
+  const sb = $("#shift-body");
+  sb.replaceChildren();
+  S.config.shifts.forEach((shift, i) => {
+    const byWd = (shift.staff_by_weekday = shift.staff_by_weekday || {});
+    sb.append(el("tr", {},
+      el("td", {}, el("input", { type: "text", value: shift.name, onchange: (ev) => renameShift(i, ev.target) })),
+      el("td", {}, timeInput(shift, "start")),
+      el("td", {}, timeInput(shift, "end")),
+      el("td", {}, lengthCell(shift)),
+      el("td", {}, numInput(shift.staff ?? 1, (v) => { label("Shift {name}: staff", { name: shift.name }); shift.staff = v ?? 1; renderTeamPlaceholders(); changed(); })),
+      ...WD.map((w) => {
+        const key = Object.keys(byWd).find((k) => k.slice(0, 3) === w);
+        return el("td", {}, numInput(key ? byWd[key] : null, (v) => {
+          for (const k of Object.keys(byWd)) if (k.slice(0, 3) === w) delete byWd[k];
+          if (v != null) byWd[w] = v;
+          label("Shift {name}: staff", { name: shift.name });
+          changed();
+        }, { placeholder: String(shift.staff ?? 1), cls: "wd" }));
+      }),
+      el("td", { style: "white-space:nowrap" },
+        el("button", { class: "btn ghost move", title: t("Move up"), "aria-label": t("Move {name} up", { name: shift.name }), text: "↑", disabled: i === 0, onclick: () => moveShift(i, i - 1) }),
+        el("button", { class: "btn ghost move", title: t("Move down"), "aria-label": t("Move {name} down", { name: shift.name }), text: "↓", disabled: i === S.config.shifts.length - 1, onclick: () => moveShift(i, i + 1) }),
+        el("button", { class: "btn ghost", title: t("Remove"), "aria-label": t("Remove {name}", { name: shift.name }), text: "✕", onclick: () => removeShift(i) })),
+    ));
+  });
+
+  document.querySelectorAll("[data-rule]").forEach((inp) => { inp.value = S.config.rules[inp.dataset.rule]; });
+  const wt = $("#weekend-toggles");
+  wt.replaceChildren(...WD.map((w, wi) => {
+    const on = S.config.rules.weekend.some((x) => x.slice(0, 3) === w);
+    return el("button", { class: "toggle" + (on ? " on" : ""), text: wdName(wi), "aria-pressed": String(on), onclick: () => {
+      const cur = S.config.rules.weekend.filter((x) => x.slice(0, 3) !== w);
+      if (!on) cur.push(w);
+      S.config.rules.weekend = WD.filter((d) => cur.some((x) => x.slice(0, 3) === d));
+      label("Weekend days changed");
+      renderTeam(); changed({ structure: true });
+    } });
+  }));
+
+  const nt = $("#night-toggles");
+  nt.replaceChildren(...S.config.shifts.map((sh) => {
+    const on = isNightShift(sh);
+    return el("button", { class: "toggle" + (on ? " on" : ""), text: sh.name, "aria-pressed": String(on), onclick: () => {
+      const cur = S.config.shifts.filter((x) => (x === sh ? !on : isNightShift(x))).map((x) => x.name);
+      S.config.rules.night_shifts = cur;
+      label("Night shifts changed");
+      for (const x of S.config.shifts) delete x.night;  // the list in Rules replaces per-shift flags
+      renderTeam(); changed({ structure: true });
+    } });
+  }));
+  if (!S.config.shifts.length) nt.append(el("span", { class: "muted", text: t("Add shifts first.") }));
+
+  const wg = $("#weights");
+  wg.replaceChildren(...Object.keys(S.config.weights).map((k) =>
+    el("label", {}, t(k.replace(/_/g, " ")),
+      numInput(S.config.weights[k], (v) => { label("Weights changed"); S.config.weights[k] = v ?? S.defaults.weights[k]; changed(); }, { step: 1 }))));
+}
+// shift times are typed as 24-hour HH:MM (the browser time picker shows AM/PM in some languages)
+const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+function hours(t) { const m = TIME_RE.exec(t || ""); return m ? Number(m[1]) + Number(m[2]) / 60 : null; }
+function shiftLength(sh) {
+  const a = hours(sh.start), b = hours(sh.end);
+  if (a == null || b == null) return null;
+  return b > a ? b - a : b - a + 24;
+}
+function timeInput(shift, key) {
+  return el("input", {
+    type: "text", class: "time", value: shift[key], placeholder: "HH:MM", inputmode: "numeric", maxlength: 5,
+    "aria-label": t(key === "start" ? "{name} start time" : "{name} end time", { name: shift.name }),
+    onchange: (ev) => {
+      const v = ev.target.value.trim().replace(/^(\d{1,2})[.h]?(\d{2})$/, "$1:$2");
+      const m = TIME_RE.exec(v);
+      if (!m) {
+        toast(t("\"{v}\" is not a valid time. Use 24-hour HH:MM, e.g. 06:00 or 22:00.", { v: ev.target.value }));
+        ev.target.value = shift[key];
+        return;
+      }
+      shift[key] = `${m[1].padStart(2, "0")}:${m[2]}`;
+      label("Shift {name}: times", { name: shift.name });
+      renderTeam();
+      changed({ structure: true });
+    },
+  });
+}
+function lengthCell(shift) {
+  const len = shiftLength(shift);
+  if (len == null) return el("span", { class: "muted", text: "–" });
+  const overnight = hours(shift.end) < hours(shift.start) && hours(shift.end) > 0;
+  const text = `${String(Math.round(len * 10) / 10).replace(".", LANG === "de" ? "," : ".")} h` + (overnight ? t(" (overnight)") : "");
+  return len > 12
+    ? el("span", { class: "off", text: t("{len}: check the times", { len: text }), title: t("Longer than 12 hours. Is the start or end time wrong?") })
+    : el("span", { class: "muted", text });
+}
+function renderTeamPlaceholders() {
+  document.querySelectorAll("#shift-body tr").forEach((tr, i) => {
+    tr.querySelectorAll("input.wd").forEach((inp) => (inp.placeholder = String(S.config.shifts[i].staff ?? 1)));
+  });
+}
+
+function uniqueName(base, taken) {
+  let n = 1, name = base;
+  while (taken.includes(name)) name = `${base} ${++n}`;
+  return name;
+}
+function addEmployee() {
+  beginStep();
+  const name = uniqueName(t("New employee"), S.config.employees.map((e) => e.name));
+  S.config.employees.push({ name, contract: "full-time" });
+  label("Added employee {name}", { name });
+  S.grid[name] = S.dates.map(() => S.config.shifts.map(() => "N"));
+  S.selected = S.selected ?? name;
+  renderTeam(); changed({ structure: true });
+  const inputs = document.querySelectorAll("#emp-body input[type=text]");
+  inputs[inputs.length - 1]?.select();
+}
+function renameEmployee(i, input) {
+  const emp = S.config.employees[i];
+  const name = input.value.trim();
+  if (!name || S.config.employees.some((e, j) => j !== i && e.name === name)) {
+    toast(name ? t("There is already an employee called \"{name}\".", { name }) : t("Name cannot be empty."));
+    input.value = emp.name;
+    return;
+  }
+  label("Renamed {old} → {new}", { old: emp.name, new: name });
+  S.grid[name] = S.grid[emp.name];
+  if (name !== emp.name) delete S.grid[emp.name];
+  if (S.selected === emp.name) S.selected = name;
+  emp.name = name;
+  changed({ structure: true });
+}
+function removeEmployee(i) {
+  const emp = S.config.employees[i];
+  if (!confirm(t("Remove {name} and their availability?", { name: emp.name }))) return;
+  beginStep();
+  label("Removed employee {name}", { name: emp.name });
+  S.config.employees.splice(i, 1);
+  delete S.grid[emp.name];
+  if (S.selected === emp.name) S.selected = S.config.employees[0]?.name ?? null;
+  renderTeam(); changed({ structure: true });
+}
+function addShift() {
+  beginStep();
+  const name = uniqueName(t("Shift"), S.config.shifts.map((s) => s.name));
+  label("Added shift {name}", { name });
+  S.config.shifts.push({ name, start: "08:00", end: "16:00", staff: 1, staff_by_weekday: {} });
+  for (const rows of Object.values(S.grid)) rows.forEach((day) => day.push("N"));
+  renderTeam(); changed({ structure: true });
+}
+function renameShift(i, input) {
+  const shift = S.config.shifts[i];
+  const name = input.value.trim();
+  if (!name || S.config.shifts.some((s, j) => j !== i && s.name === name)) {
+    toast(name ? t("There is already a shift called \"{name}\".", { name }) : t("Name cannot be empty."));
+    input.value = shift.name;
+    return;
+  }
+  label("Renamed {old} → {new}", { old: shift.name, new: name });
+  const nights = S.config.rules.night_shifts;
+  if (Array.isArray(nights)) S.config.rules.night_shifts = nights.map((n) => (n === shift.name ? name : n));
+  shift.name = name;
+  renderTeam();
+  changed({ structure: true });
+}
+function moveShift(i, j) {
+  beginStep();
+  // the order here is the order everywhere (availability, schedule, exports)
+  if (j < 0 || j >= S.config.shifts.length) return;
+  label("Moved shift {name}", { name: S.config.shifts[i].name });
+  const list = S.config.shifts;
+  [list[i], list[j]] = [list[j], list[i]];
+  for (const rows of Object.values(S.grid)) rows.forEach((day) => { [day[i], day[j]] = [day[j], day[i]]; });
+  renderTeam();
+  changed({ structure: true });
+}
+function removeShift(i) {
+  if (!confirm(t("Remove the {name} shift?", { name: S.config.shifts[i].name }))) return;
+  beginStep();
+  label("Removed shift {name}", { name: S.config.shifts[i].name });
+  const [gone] = S.config.shifts.splice(i, 1);
+  if (Array.isArray(S.config.rules.night_shifts))
+    S.config.rules.night_shifts = S.config.rules.night_shifts.filter((n) => n !== gone.name);
+  for (const rows of Object.values(S.grid)) rows.forEach((day) => day.splice(i, 1));
+  renderTeam(); changed({ structure: true });
+}
+
+// ---------- availability tab ----------
+function mixBar(name) {
+  const counts = { M: 0, C: 0, N: 0, X: 0 };
+  let total = 0;
+  const emp = S.config.employees.find((e) => e.name === name);
+  (S.grid[name] || []).forEach((day, d) => day.forEach((_, s) => { counts[effLevel(emp, d, s)]++; total++; }));
+  return el("span", { class: "mix", title: LEVELS.map((l) => `${t(l.label)}: ${counts[l.code]}`).join(" · ") },
+    LEVELS.map((l) => el("span", { style: `width:${total ? (100 * counts[l.code]) / total : 0}%;background:var(--${l.code})` })));
+}
+
+function renderAvail() {
+  const list = $("#avail-emps");
+  const team = S.availView === "team";
+  list.replaceChildren(...S.config.employees.map((e) =>
+    el("button", { class: "emp-btn" + (!team && e.name === S.selected ? " active" : ""), onclick: () => { S.selected = e.name; S.availView = "one"; renderAvail(); } },
+      el("span", { class: "n" }, e.name, worksNights(e) ? null : el("span", { class: "tag", text: t("no nights") })), mixBar(e.name))));
+  if (!S.config.employees.length) list.append(el("p", { class: "muted", text: t("Add employees on the Team tab first.") }));
+
+  $("#brushes").replaceChildren(
+    ...LEVELS.map((l, i) => el("button", {
+      class: `brush lvl-${l.code}` + (S.brush === l.code ? " on" : ""), "aria-pressed": String(S.brush === l.code),
+      onclick: () => { S.brush = l.code; renderAvail(); } }, t(l.label), el("kbd", { text: String(i + 1) }))));
+
+  $("#view-switch").replaceChildren(
+    el("button", { class: "toggle" + (team ? "" : " on"), text: t("One employee"), onclick: () => { S.availView = "one"; renderAvail(); } }),
+    el("button", { class: "toggle" + (team ? " on" : ""), text: t("Whole team, one shift"), onclick: () => { S.availView = "team"; renderAvail(); } }));
+  const name = S.selected;
+  const bulk = $("#bulk");
+  const cal = $("#cal");
+  cal.replaceChildren();
+  bulk.replaceChildren();
+  $("#teamgrid").replaceChildren();
+  cal.hidden = team;
+  $("#avail-layout").classList.toggle("team-view", team);
+  if (team) return renderTeamGrid();
+  $("#avail-title").textContent = name ? `${name} · ${monthLabel()}` : monthLabel();
+  $("#avail-hint").textContent = t("Pick a level, then click or drag across shifts. Click a date to set the whole day, or a weekday heading to set that weekday all month.");
+  if (!name || !S.config.shifts.length) { renderCoverage(); return; }
+  const emp = S.config.employees.find((e) => e.name === name);
+  const blocked = (s) => !worksNights(emp) && isNightShift(S.config.shifts[s]);
+
+  const brushLabel = lvl(S.brush);
+  bulk.append(el("span", { class: "muted", text: t("Set \"{level}\" for:", { level: brushLabel }) }),
+    el("button", { class: "btn", text: t("Whole month"), onclick: () => paintWhere(() => true) }),
+    ...S.config.shifts.map((sh, s) => el("button", { class: "btn", text: t("Every {shift}", { shift: sh.name }), disabled: blocked(s),
+      onclick: () => paintWhere((d, ss) => ss === s) })));
+
+  WD.forEach((w, wi) => cal.append(el("button", { class: "wdh", text: wdName(wi), title: t("Set every {day} to \"{level}\"", { day: wdName(wi), level: brushLabel }),
+    onclick: () => paintWhere((d) => wdOf(S.dates[d]) === wi) })));
+  for (let i = 0; i < wdOf(S.dates[0]); i++) cal.append(el("div"));
+  const rows = S.grid[name];
+  S.dates.forEach((date, d) => {
+    const cell = el("div", { class: "day" + (isWeekend(date) ? " weekend" : "") },
+      el("button", { class: "dn", text: String(date.getDate()), title: t("Set the whole day to \"{level}\"", { level: brushLabel }), onclick: () => paintWhere((dd) => dd === d) }));
+    S.config.shifts.forEach((sh, s) => {
+      const need = staffNeed(sh, date);
+      const code = rows[d][s];
+      const text = need > 0 ? sh.name : t("{shift} (closed)", { shift: sh.name });
+      cell.append(blocked(s)
+        ? el("button", { class: "chip off", disabled: true, text, title: t("{name} does not work night shifts", { name }) })
+        : el("button", {
+          class: `chip lvl-${code}`, "data-d": d, "data-s": s, text,
+          title: `${iso(date)} ${sh.name}: ${lvl(code)}`,
+        }));
+    });
+    cal.append(cell);
+  });
+  renderCoverage();
+}
+// all employees x all days for one shift: fastest way to fill in e.g. every Saturday night
+function renderTeamGrid() {
+  $("#avail-title").textContent = t("Whole team · {month}", { month: monthLabel() });
+  $("#avail-hint").textContent = t("Pick a level, then click or drag across the grid. Click a name to set the whole row, or a day to set everyone that day.");
+  const shifts = S.config.shifts;
+  if (!shifts.length || !S.config.employees.length) { renderCoverage(); return; }
+  let s = shifts.findIndex((x) => x.name === S.teamShift);
+  if (s < 0) { s = 0; S.teamShift = shifts[0].name; }
+  const sh = shifts[s];
+  const brushLabel = lvl(S.brush);
+  $("#bulk").append(el("span", { class: "muted", text: t("Shift:") }),
+    ...shifts.map((x) => el("button", { class: "toggle" + (x === sh ? " on" : ""), text: x.name, onclick: () => { S.teamShift = x.name; renderAvail(); } })));
+  const blocked = (e) => !worksNights(e) && isNightShift(sh);
+  const paintTeam = (pred) => {
+    S.config.employees.forEach((e) => {
+      if (blocked(e)) return;
+      S.dates.forEach((date, d) => { if (staffNeed(sh, date) > 0 && pred(e, d)) S.grid[e.name][d][s] = S.brush; });
+    });
+    label("Availability of the team: {shift}", { shift: sh.name });
+    renderAvail(); changed();
+  };
+  const head = el("tr", {}, el("th"), S.dates.map((date, d) => el("th", { class: isWeekend(date) ? "wkd" : null },
+    el("button", { class: "dayh", title: t("Set everyone on {date} to \"{level}\"", { date: iso(date), level: brushLabel }), onclick: () => paintTeam((e, dd) => dd === d) },
+      String(date.getDate()), el("br"), wdName(wdOf(date)).slice(0, 2)))));
+  const body = S.config.employees.map((e) => el("tr", {},
+    el("th", {}, el("button", { class: "rowh", text: e.name, title: t("Set all of {name}'s {shift} shifts to \"{level}\"", { name: e.name, shift: sh.name, level: brushLabel }), onclick: () => paintTeam((x) => x === e) })),
+    S.dates.map((date, d) => {
+      const code = S.grid[e.name][d][s];
+      let cell;
+      if (staffNeed(sh, date) <= 0) cell = el("button", { class: "chip tcell closed", disabled: true, text: "–", title: t("Closed") });
+      else if (blocked(e)) cell = el("button", { class: "chip tcell off", disabled: true, title: t("{name} does not work night shifts", { name: e.name }) });
+      else cell = el("button", { class: `chip tcell lvl-${code}`, "data-e": e.name, "data-d": d, "data-s": s, text: code,
+        title: `${e.name} · ${iso(date)} ${sh.name}: ${lvl(code)}` });
+      return el("td", {}, cell);
+    })));
+  const foot = el("tr", {}, el("td", { class: "small", style: "text-align:left;padding-left:2px", text: t("Available / needed") }),
+    S.dates.map((date, d) => {
+      const need = staffNeed(sh, date);
+      if (need <= 0) return el("td", { class: isWeekend(date) ? "wkd" : null, text: "–" });
+      const avail = S.config.employees.filter((e) => effLevel(e, d, s) !== "X").length;
+      return el("td", { class: (isWeekend(date) ? "wkd " : "") + (avail < need ? "short" : ""), text: `${avail}/${need}`,
+        title: t("{a} available, {n} needed", { a: avail, n: need }) });
+    }));
+  $("#teamgrid").append(el("table", { class: "tgrid" }, el("thead", {}, head), el("tbody", {}, body), el("tfoot", {}, foot)));
+  renderCoverage();
+}
+const nightNames = () => S.config.shifts.filter(isNightShift).map((sh) => sh.name);
+function monthLabel(month = S.config.month) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(LOCALE(), { month: "long", year: "numeric" });
+}
+function paintWhere(pred) {
+  const rows = S.grid[S.selected];
+  const emp = S.config.employees.find((e) => e.name === S.selected);
+  const skip = (s) => !worksNights(emp) && isNightShift(S.config.shifts[s]);
+  rows.forEach((day, d) => day.forEach((_, s) => { if (pred(d, s) && !skip(s)) day[s] = S.brush; }));
+  label("Availability of {name}", { name: S.selected });
+  renderAvail(); changed();
+}
+function paintChip(chip) {
+  const d = Number(chip.dataset.d), s = Number(chip.dataset.s);
+  const who = chip.dataset.e || S.selected;
+  const day = S.grid[who][d];
+  if (day[s] === S.brush) return;
+  day[s] = S.brush;
+  if (chip.dataset.e) { chip.className = `chip tcell lvl-${S.brush}`; chip.textContent = S.brush; }
+  else chip.className = `chip lvl-${S.brush}`;
+  chip.title = `${iso(S.dates[d])} ${S.config.shifts[s].name}: ${lvl(S.brush)}`;
+  S.dirty = true;
+}
+let painting = false;
+function setupPainting() {
+  const cal = $("#avail-main");
+  cal.addEventListener("pointerdown", (ev) => {
+    const chip = ev.target.closest(".chip");
+    if (!chip || chip.disabled) return;
+    ev.preventDefault();
+    beginStep();
+    if (chip.dataset.e) label("Availability of the team: {shift}", { shift: S.config.shifts[Number(chip.dataset.s)].name });
+    else label("Availability of {name}", { name: S.selected });
+    painting = true;
+    paintChip(chip);
+  });
+  cal.addEventListener("pointerover", (ev) => {
+    if (!painting) return;
+    const chip = ev.target.closest(".chip");
+    if (chip && !chip.disabled) paintChip(chip);
+  });
+  window.addEventListener("pointerup", () => {
+    if (!painting) return;
+    painting = false;
+    markEdited();
+    if (S.availView === "team") return renderAvail();  // refresh the available/needed row and the list
+    const btn = [...document.querySelectorAll("#avail-emps .emp-btn")].find((b) => b.classList.contains("active"));
+    if (btn) btn.lastChild.replaceWith(mixBar(S.selected));
+    renderCoverage();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if ($("#tab-avail").hidden || ev.target.matches("input, select, textarea")) return;
+    const i = ["1", "2", "3", "4"].indexOf(ev.key);
+    if (i >= 0) { S.brush = LEVELS[i].code; renderAvail(); }
+  });
+}
+
+function coverageIssues() {
+  const issues = [];
+  let demand = 0;
+  S.dates.forEach((date, d) => S.config.shifts.forEach((sh, s) => {
+    const need = staffNeed(sh, date);
+    if (need <= 0) return;
+    demand += need;
+    let avail = 0, must = 0;
+    for (const e of S.config.employees) {
+      const c = effLevel(e, d, s);
+      if (c !== "X") avail++;
+      if (c === "M") must++;
+    }
+    const where = `${wdName(wdOf(date))} ${date.getDate()} ${sh.name}`;
+    if (avail < need) issues.push({ bad: true, text: t("{where}: {a} available, {n} needed", { where, a: avail, n: need }) });
+    if (must > need) issues.push({ bad: false, text: t("{where}: {m} \"must work\" requests for {pos}", { where, m: must, pos: tn(need, "{n} position", "{n} positions") }) });
+  }));
+  return { issues, demand };
+}
+function renderCoverage() {
+  const box = $("#coverage");
+  const badge = $("#cov-badge");
+  if (!S.config.employees.length || !S.config.shifts.length) { box.replaceChildren(); badge.hidden = true; return; }
+  const { issues, demand } = coverageIssues();
+  const capped = S.config.employees.every((e) => e.max_shifts != null);
+  const capacity = S.config.employees.reduce((a, e) => a + (e.max_shifts ?? 0), 0);
+  const kids = [];
+  kids.push(el("p", { class: "small muted", text: t("{d} shift positions to fill this month", { d: demand }) +
+    (capped ? t(" · combined max capacity {c}", { c: capacity }) : "") }));
+  if (capped && capacity < demand) kids.push(el("div", { class: "note bad", text: t("Max shifts add up to {c}, fewer than the {d} needed. Some slots will stay empty.", { c: capacity, d: demand }) }));
+  else if (capped && capacity < demand * 1.05) kids.push(el("div", { class: "note warn", text: t("Capacity is very tight; the schedule may need rule violations.") }));
+  if (!issues.length) kids.push(el("div", { class: "note ok", text: t("Every shift has enough available people.") }));
+  else {
+    const bad = issues.filter((i) => i.bad).length;
+    kids.push(el("div", { class: "note " + (bad ? "bad" : "warn"), text: tn(issues.length, "{n} slot cannot be covered as requested.", "{n} slots cannot be covered as requested.") }));
+    kids.push(el("ul", {}, issues.slice(0, 40).map((i) => el("li", {}, i.text,
+      el("button", { class: "btn", style: "margin-left:6px;padding:1px 8px;font-size:12px", text: t("Choose…"),
+        onclick: () => (i.bad ? chooseForShortages() : chooseMustWinners()) })))));
+    if (issues.length > 40) kids.push(el("p", { class: "small muted", text: t("…and {n} more", { n: issues.length - 40 }) }));
+  }
+  box.replaceChildren(...kids);
+  badge.hidden = !issues.length;
+  badge.textContent = issues.length;
+  renderStaffing();
+}
+
+// ---------- staffing needs: is the team big enough, and which shifts lack people? ----------
+// An estimate from availability and limits, before any schedule is built.
+function staffingStats() {
+  const emps = S.config.employees, D = S.dates.length;
+  const k = Math.max(1, Number(S.config.rules.max_consecutive_days) || 6);
+  const perDay = Math.max(1, Number(S.config.rules.max_shifts_per_day) || 1);
+  // most shifts each person can work this month: available days, days-in-a-row limit, own maximum
+  const cap = emps.map((e) => {
+    const availDays = S.dates.filter((date, d) =>
+      S.config.shifts.some((sh, s) => staffNeed(sh, date) > 0 && effLevel(e, d, s) !== "X")).length;
+    return Math.min(availDays * perDay, (D - Math.floor(D / (k + 1))) * perDay, e.max_shifts ?? Infinity);
+  });
+  const shifts = S.config.shifts.map((sh, s) => {
+    let needed = 0, availSum = 0, days = 0, missing = 0, peak = 0;
+    const shortDays = [];
+    S.dates.forEach((date, d) => {
+      const need = staffNeed(sh, date);
+      if (need <= 0) return;
+      const avail = emps.filter((e) => effLevel(e, d, s) !== "X").length;
+      needed += need; availSum += avail; days++;
+      if (avail < need) { missing += need - avail; peak = Math.max(peak, need - avail); shortDays.push(d); }
+    });
+    return { s, name: sh.name, needed, avgAvail: days ? availSum / days : 0, missing, peak, shortDays };
+  });
+  const demand = shifts.reduce((a, x) => a + x.needed, 0);
+  const capacity = Math.round(cap.reduce((a, b) => a + b, 0));
+  // shifts one more person of each contract type could take: the team's own average, else a rough value
+  const typical = {};
+  for (const c of CONTRACTS) {
+    const caps = emps.map((e, i) => ((e.contract || "full-time") === c.value ? cap[i] : 0)).filter((x) => x > 0);
+    typical[c.value] = caps.length ? Math.max(1, Math.round(caps.reduce((a, b) => a + b, 0) / caps.length))
+      : { "full-time": 20, "part-time": 10, "mini-job": 5 }[c.value];
+  }
+  const unfillable = shifts.reduce((a, x) => a + x.missing, 0);
+  return { demand, capacity, gap: Math.max(0, demand - capacity), unfillable, shifts, typical };
+}
+const wdLong = (i) => new Date(2024, 0, 1 + i).toLocaleDateString(LOCALE(), { weekday: "long" });  // 1 Jan 2024 = Monday
+function describeDays(days, s) {
+  // "every Saturday" when all Saturdays with this shift are short, otherwise the dates
+  const byWd = {};
+  days.forEach((d) => (byWd[wdOf(S.dates[d])] ||= []).push(d));
+  const parts = [], single = [];
+  for (const [wd, list] of Object.entries(byWd)) {
+    const all = S.dates.filter((date) => wdOf(date) === Number(wd) && staffNeed(S.config.shifts[s], date) > 0).length;
+    if (list.length > 1 && list.length === all) parts.push(t("every {day}", { day: wdLong(Number(wd)) }));
+    else single.push(...list);
+  }
+  single.sort((a, b) => a - b);
+  if (single.length) parts.push(single.slice(0, 6).map((d) => `${wdName(wdOf(S.dates[d]))} ${S.dates[d].getDate()}`).join(", ") + (single.length > 6 ? " …" : ""));
+  return parts.join("; ");
+}
+function renderStaffing() {
+  const box = $("#staffing");
+  if (!S.config.employees.length || !S.config.shifts.length) { box.replaceChildren(); return; }
+  const st = staffingStats();
+  const stat = (label, value) => el("div", { class: "stat" }, el("b", { text: String(value) }), el("span", { text: label }));
+  const kids = [el("div", { class: "stat-row" },
+    stat(t("Shifts needed"), st.demand), stat(t("Team can work"), st.capacity), stat(t("Employees"), S.config.employees.length))];
+  const extra = Math.max(st.gap, st.unfillable);
+  if (!extra) {
+    kids.push(el("div", { class: "note ok", text: t("Enough staff: the team can cover every shift this month.") }));
+  } else {
+    const need = (c) => Math.ceil(extra / st.typical[c]);
+    kids.push(el("div", { class: "note bad" },
+      el("strong", { text: tn(extra, "About {n} shift is missing.", "About {n} shifts are missing.") }), " ",
+      t("That is roughly {ft} more full-time, {pt} part-time or {mj} mini-job employees.",
+        { ft: need("full-time"), pt: need("part-time"), mj: need("mini-job") })));
+  }
+  kids.push(el("table", { class: "staff-table" },
+    el("thead", {}, el("tr", {}, el("th", { text: t("Shift") }), el("th", { class: "num", text: t("Needed") }),
+      el("th", { class: "num", text: t("Available / day"), title: t("Average number of people available per day") }), el("th", { class: "num", text: t("Missing") }))),
+    el("tbody", {}, st.shifts.map((x) => el("tr", {},
+      el("td", { text: x.name }), el("td", { class: "num", text: String(x.needed) }),
+      el("td", { class: "num", text: fmt1(x.avgAvail).replace(".", LANG === "de" ? "," : ".") }),
+      el("td", { class: "num" + (x.missing ? " short" : ""), text: String(x.missing) }))))));
+  const tips = st.shifts.filter((x) => x.missing).map((x) => el("li", { text: t("{shift}: {places} cannot be filled ({days}) → at least {people} for {shift} on these days.", {
+    shift: x.name, places: tn(x.missing, "{n} place", "{n} places"), days: describeDays(x.shortDays, x.s),
+    people: tn(x.peak, "{n} more person", "{n} more people") }) }));
+  if (st.gap > st.unfillable) {
+    tips.push(el("li", { text: t("The team's maximum shifts add up to less than the month needs ({c} of {d}): raise Max shifts or add staff.",
+      { c: st.capacity, d: st.demand }) }));
+  }
+  if (tips.length) kids.push(el("h3", { text: t("Where people are missing") }), el("ul", {}, tips));
+  kids.push(el("p", { class: "small muted", text: t("Estimate from availability and limits; rest times between shifts can still leave a few gaps when the schedule is built.") }));
+  box.replaceChildren(...kids);
+}
+
+// ---------- schedule tab ----------
+function renderSchedule() {
+  const root = $("#sched-root");
+  const R = S.result;
+  if (!R) {
+    root.replaceChildren(el("div", { class: "panel empty-state" },
+      el("h2", { text: t("No schedule yet") }),
+      el("p", { class: "muted", text: t("Check the team and availability, then build the schedule.") }),
+      el("button", { class: "btn primary", text: t("Build schedule"), onclick: solve })));
+    return;
+  }
+  const kids = [];
+  const top = el("div", { class: "panel print-hide" });
+  if (isStale()) top.append(el("div", { class: "note warn no-print" }, t("Inputs changed since this schedule was built. "),
+    el("button", { class: "btn", text: t("Rebuild"), onclick: solve })));
+  top.append(R.problems.length
+    ? el("div", { class: "note bad" }, el("strong", { text: tn(R.problems.length, "{n} problem to check", "{n} problems to check") }),
+        el("ul", { style: "margin:6px 0 0;padding-left:18px" }, R.problems.map((p) => el("li", { text: p }))))
+    : el("div", { class: "note ok", text: t("All hard rules satisfied: every shift is staffed and every must / must-not request is honoured.") }));
+  top.append(el("div", { class: "bar no-print", style: "padding:4px 0 0" },
+    el("span", { class: "toggles" },
+      el("button", { class: "toggle" + (S.view === "month" ? " on" : ""), text: t("Month"), onclick: () => { S.view = "month"; renderSchedule(); } }),
+      el("button", { class: "toggle" + (S.view === "day" ? " on" : ""), text: t("By day"), onclick: () => { S.view = "day"; renderSchedule(); } }),
+      el("button", { class: "toggle" + (S.view === "emp" ? " on" : ""), text: t("By employee"), onclick: () => { S.view = "emp"; renderSchedule(); } })),
+    el("span", { class: "legend" },
+      LEVELS.slice(0, 3).map((l) => el("span", {}, el("span", { class: `dot ${l.code}`, style: "width:8px;height:8px;border-radius:50%;display:inline-block" }), t(l.label)))),
+    el("span", { class: "spacer" }),
+    el("span", { class: "small muted", title: t("Score {s} (lower is better)", { s: fmt1(R.cost) }),
+      text: R.edited ? t("Changed by hand") : t("Built in {s} s", { s: R.seconds }) }),
+    el("button", { class: "btn primary", text: t("Export to Excel"), onclick: exportExcel }),
+    el("button", { class: "btn", text: t("CSV by day"), onclick: () => download(`schedule_${R.month}_by_shift.csv`, csvByShift()) }),
+    el("button", { class: "btn", text: t("CSV by employee"), onclick: () => download(`schedule_${R.month}_by_employee.csv`, csvByEmployee()) }),
+    el("button", { class: "btn", text: t("Print"), onclick: () => window.print() })));
+  kids.push(top);
+
+  kids.push(el("div", { class: "panel print-area" }, el("h2", { text: t("Schedule · {month} ({n} days)", { month: monthLabel(R.month), n: R.dates.length }) }),
+    el("div", { class: "scroll" }, S.view === "month" ? monthCalendar(R) : S.view === "day" ? dayTable(R) : empTable(R))));
+  kids.push(el("div", { class: "panel print-hide" }, el("h2", { text: t("Per employee") }), el("div", { class: "scroll" }, summaryTable(R)),
+    el("p", { class: "hint", text: t("Fair share accounts for the contract and availability. Click a row to highlight that person in the schedule.") })));
+  root.replaceChildren(...kids);
+}
+function resultDates(R) { return R.dates.map((s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }); }
+function slotMap(R) { const m = new Map(); R.slots.forEach((sl) => m.set(`${sl.d}:${sl.s}`, sl)); return m; }
+function toggleHighlight(name) { S.highlight = S.highlight === name ? null : name; renderSchedule(); }
+
+function monthCalendar(R) {
+  // calendar grid: every day of the month, each shift with the people working it
+  const map = slotMap(R), dates = resultDates(R);
+  const abbr = abbreviations(R.shifts.map((s) => s.name));
+  const cal = el("div", { class: "mcal" }, WD.map((w, i) => el("div", { class: "wdh", text: wdName(i) })));
+  for (let i = 0; i < wdOf(dates[0]); i++) cal.append(el("div"));
+  dates.forEach((date, d) => {
+    let gap = false;
+    const rows = R.shifts.map((sh, s) => {
+      const sl = map.get(`${d}:${s}`);
+      if (!sl) return null;
+      if (sl.people.includes(null)) gap = true;
+      return el("div", { class: "mshift editable", title: t("Click to change who works this shift"), onclick: () => editSlot(d, s) },
+        el("span", { class: "sn", text: abbr[s], title: sh.label }),
+        el("span", { class: "who" }, sl.people.map((p) => p
+          ? el("span", { class: "pchip" + (S.highlight === p.name ? " hl" : ""), title: `${sh.label} · ${lvl(p.level)}` },
+              el("span", { class: `dot ${p.level}` }), p.name)
+          : el("span", { class: "pchip empty", text: t("Unfilled") }))));
+    });
+    cal.append(el("div", { class: "mday" + (R.weekend[d] ? " weekend" : "") + (gap ? " has-gap" : "") },
+      el("div", { class: "dnum" }, String(date.getDate()), el("span", { text: wdName(wdOf(date)) })), rows));
+  });
+  return el("div", {}, cal,
+    el("p", { class: "hint", text: R.shifts.map((s, i) => `${abbr[i]} = ${s.label}`).join(" · ") + t(" · click a shift to change who works it · click a name in the table below to highlight their shifts") }));
+}
+function dayTable(R) {
+  const map = slotMap(R), dates = resultDates(R);
+  return el("table", { class: "sched" },
+    el("thead", {}, el("tr", {}, el("th", { text: t("Date") }), R.shifts.map((s) => el("th", { text: s.label })))),
+    el("tbody", {}, dates.map((date, d) => el("tr", { class: R.weekend[d] ? "weekend" : null },
+      el("td", { class: "date", text: `${wdName(wdOf(date))} ${String(date.getDate()).padStart(2, "0")}` }),
+      R.shifts.map((_, s) => {
+        const sl = map.get(`${d}:${s}`);
+        if (!sl) return el("td", { class: "muted", text: "—" });
+        return el("td", { class: "editable", title: t("Click to change who works this shift"), onclick: () => editSlot(d, s) }, sl.people.map((p) => p
+          ? el("span", { class: "pchip" + (S.highlight === p.name ? " hl" : ""), title: lvl(p.level) },
+              el("span", { class: `dot ${p.level}` }), p.name)
+          : el("span", { class: "pchip empty", text: t("Unfilled") })));
+      })))));
+}
+function empTable(R) {
+  const dates = resultDates(R);
+  const cells = {};
+  R.slots.forEach((sl) => sl.people.forEach((p) => { if (p) (cells[`${p.name}:${sl.d}`] ||= []).push({ s: sl.s, level: p.level }); }));
+  const abbr = abbreviations(R.shifts.map((s) => s.name));
+  return el("div", {},
+    el("table", { class: "emp-grid" },
+      el("thead", {}, el("tr", {}, el("th", { class: "name", text: t("Employee") }),
+        dates.map((date, d) => el("th", { class: R.weekend[d] ? "wkd" : null }, String(date.getDate()), el("br"), wdName(wdOf(date)).slice(0, 2))),
+        el("th", { text: "Σ" }))),
+      el("tbody", {}, R.employees.map((name) => {
+        let total = 0;
+        return el("tr", {},
+          el("td", { class: "name" + (S.highlight === name ? " hl" : ""), text: name, onclick: () => toggleHighlight(name) }),
+          dates.map((_, d) => {
+            const list = cells[`${name}:${d}`] || [];
+            total += list.length;
+            return el("td", { class: R.weekend[d] ? "wkd" : null }, list.map((x) =>
+              el("span", { class: `s lvl-${x.level}`, title: R.shifts[x.s].label, text: abbr[x.s] })));
+          }),
+          el("td", { text: String(total) }));
+      }))),
+    el("p", { class: "hint", text: R.shifts.map((s, i) => `${abbr[i]} = ${s.label}`).join(" · ") }));
+}
+function abbreviations(names) {
+  for (let n = 1; n <= 4; n++) {
+    const a = names.map((x) => x.slice(0, n).toUpperCase());
+    if (new Set(a).size === a.length) return a;
+  }
+  return names.map((_, i) => String(i + 1));
+}
+function summaryTable(R) {
+  const num = (text, off) => el("td", { class: "num" + (off ? " off" : ""), text });
+  return el("table", { class: "summary" },
+    el("thead", {}, el("tr", {}, el("th", { text: t("Employee") }), ["Shifts", "Fair share", "Weekend", "Weekend share", "Must work", "Can work", "Neutral"].map((x) => el("th", { class: "num", text: t(x) })))),
+    el("tbody", {}, R.summary.map((r) => el("tr", { class: S.highlight === r.name ? "hl" : null, onclick: () => toggleHighlight(r.name) },
+      el("td", { text: r.name }),
+      num(String(r.shifts), Math.abs(r.shifts - r.target) > 1.5),
+      num(fmt1(r.target)),
+      num(String(r.weekend), Math.abs(r.weekend - r.weekend_target) > 1.5),
+      num(fmt1(r.weekend_target)),
+      num(`${r.must}/${r.must_total}`, r.must < r.must_total),
+      num(String(r.can)),
+      num(String(r.neutral))))));
+}
+
+function csvCell(v) { v = String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
+function csvByShift() {
+  const R = S.result, dates = resultDates(R);
+  const rows = [["date", "weekday", "shift", "time", "employees"].map((x) => t(x))];
+  R.slots.forEach((sl) => rows.push([R.dates[sl.d], wdName(wdOf(dates[sl.d])), R.shifts[sl.s].name,
+    R.shifts[sl.s].label.slice(R.shifts[sl.s].name.length + 1), sl.people.map((p) => (p ? p.name : t("(EMPTY)"))).join("; ")]));
+  return rows.map((r) => r.map(csvCell).join(",")).join("\n") + "\n";
+}
+function csvByEmployee() {
+  const R = S.result, dates = resultDates(R);
+  const cells = {};
+  R.slots.forEach((sl) => sl.people.forEach((p) => { if (p) (cells[`${p.name}:${sl.d}`] ||= []).push(R.shifts[sl.s].name); }));
+  const rows = [[t("employee"), ...dates.map((d) => `${String(d.getDate()).padStart(2, "0")} ${wdName(wdOf(d))}`), t("total")]];
+  R.employees.forEach((name) => {
+    const days = dates.map((_, d) => (cells[`${name}:${d}`] || []).join("+"));
+    rows.push([name, ...days, days.reduce((a, x) => a + (x ? x.split("+").length : 0), 0)]);
+  });
+  return rows.map((r) => r.map(csvCell).join(",")).join("\n") + "\n";
+}
+async function exportExcel(ev) {
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/export-xlsx", { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify({ result: S.result }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+    download(`schedule_${S.result.month}.xlsx`, await r.blob());
+  } catch (e) {
+    toast(t("Excel export failed: {e}", { e: e.message }));
+  } finally {
+    btn.disabled = false;
+  }
+}
+function download(filename, data) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: "text/csv" });
+  const a = el("a", { href: URL.createObjectURL(blob), download: filename });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---------- questions for the admin (one generic dialog) ----------
+// groups: [{ legend, min, max, hint, options: [{ value, label, why, disabled }] }]
+// Resolves to the chosen values per group, or null when cancelled.
+function pickDialog({ title, intro, okLabel, groups }) {
+  const dlg = $("#pick-dialog"), body = $("#pick-body"), err = $("#pick-err"), ok = $("#pick-ok");
+  $("#pick-title").textContent = title;
+  $("#pick-intro").textContent = intro;
+  ok.textContent = okLabel;
+  err.textContent = "";
+  body.replaceChildren(...groups.map((g, i) => {
+    const type = g.min === 1 && g.max === 1 ? "radio" : "checkbox";
+    return el("fieldset", { "data-i": i },
+      el("legend", { text: g.legend }),
+      el("div", { class: "opts" }, g.options.map((o) =>
+        el("label", { class: "opt" + (o.disabled ? " disabled" : "") },
+          el("input", { type, name: `g${i}`, value: o.value, disabled: o.disabled, checked: o.checked }),
+          el("span", {}, o.label, o.why ? el("span", { class: "why", text: ` · ${o.why}` }) : null)))),
+      g.hint ? el("div", { class: "small muted", style: "margin-top:6px", text: g.hint }) : null);
+  }));
+  const chosen = (i) => [...body.querySelectorAll(`fieldset[data-i="${i}"] input:checked`)].map((x) => x.value);
+  // one place: ticking someone replaces the previous choice (but can still be unticked to leave it empty)
+  groups.forEach((g, i) => {
+    if (g.max !== 1 || g.min === 1) return;
+    body.querySelector(`fieldset[data-i="${i}"]`).addEventListener("change", (ev) => {
+      if (ev.target.checked) body.querySelectorAll(`fieldset[data-i="${i}"] input:checked`).forEach((x) => { if (x !== ev.target) x.checked = false; });
+    });
+  });
+  return new Promise((resolve) => {
+    const onClick = (ev) => {
+      if (ev.target !== ok) return;
+      let bad = 0;
+      groups.forEach((g, i) => {
+        const n = chosen(i).length, wrong = n < g.min || n > g.max;
+        body.querySelector(`fieldset[data-i="${i}"]`).classList.toggle("invalid", wrong);
+        if (wrong) bad++;
+      });
+      if (bad) { ev.preventDefault(); err.textContent = bad > 1 ? t("Check the highlighted shifts.") : t("Check the highlighted shift."); }
+    };
+    dlg.addEventListener("click", onClick);
+    dlg.addEventListener("close", () => {
+      dlg.removeEventListener("click", onClick);
+      resolve(dlg.returnValue === "ok" ? groups.map((_, i) => chosen(i)) : null);
+    }, { once: true });
+    dlg.returnValue = "";
+    dlg.showModal();
+  });
+}
+const whenLabel = (d) => S.dates[d].toLocaleDateString(LOCALE(), { weekday: "short", day: "numeric", month: "short" });
+
+// 1) more "must work" requests than positions -> admin picks who keeps the shift, the others become "Can work"
+function mustConflicts() {
+  const out = [];
+  S.dates.forEach((date, d) => S.config.shifts.forEach((sh, s) => {
+    const need = staffNeed(sh, date);
+    if (need <= 0) return;
+    const names = S.config.employees.filter((e) => effLevel(e, d, s) === "M").map((e) => e.name);
+    if (names.length > need) out.push({ d, s, need, names });
+  }));
+  return out;
+}
+async function chooseMustWinners(okLabel = t("Apply")) {
+  const conflicts = mustConflicts();
+  if (!conflicts.length) return true;
+  const picks = await pickDialog({
+    title: t("Too many \"must work\" requests"),
+    intro: t("These shifts have more employees who must work than there are positions. Choose who keeps the shift; the others are changed to \"Can work\" for that shift."),
+    okLabel,
+    groups: conflicts.map((c) => ({
+      legend: t("{when} · {shift}: {pos}, {m} must work", { when: whenLabel(c.d), shift: S.config.shifts[c.s].name,
+        pos: tn(c.need, "{n} position", "{n} positions"), m: c.names.length }),
+      min: c.need, max: c.need, hint: c.need > 1 ? t("Choose {n}.", { n: c.need }) : null,
+      options: c.names.map((n) => ({ value: n, label: n })),
+    })),
+  });
+  if (!picks) return false;
+  conflicts.forEach((c, i) => { for (const n of c.names) if (!picks[i].includes(n)) S.grid[n][c.d][c.s] = "C"; });
+  label("Settled \"must work\" conflicts");
+  changed({ structure: true });
+  toast(tn(conflicts.length, "Updated {n} shift: the others are now \"Can work\".", "Updated {n} shifts: the others are now \"Can work\"."), true);
+  return true;
+}
+
+// shared: offer employees for shifts nobody can cover; the chosen ones become "Must work" for that shift
+async function chooseCover({ title, intro, okLabel, slots, why, history = "Covered shifts without anyone" }) {
+  const groups = slots.map((sl) => {
+    const options = S.config.employees
+      .filter((e) => !(sl.taken || []).includes(e.name))
+      .map((e) => {
+        const blocked = !worksNights(e) && isNightShift(S.config.shifts[sl.s]);
+        return { value: e.name, label: e.name, disabled: blocked, why: blocked ? t("doesn't work nights") : why(e, sl) };
+      });
+    return {
+      legend: t("{when} · {shift}: {pos} without anyone", { when: whenLabel(sl.d), shift: S.config.shifts[sl.s].name,
+        pos: tn(sl.short, "{n} position", "{n} positions") }),
+      min: 0, max: sl.short, options,
+      hint: tn(sl.short, "Choose up to {n}, or none to leave it unfilled.", "Choose up to {n}, or none to leave them unfilled."),
+    };
+  });
+  const picks = await pickDialog({ title, intro, okLabel, groups });
+  if (!picks) return null;
+  let count = 0;
+  slots.forEach((sl, i) => picks[i].forEach((n) => { S.grid[n][sl.d][sl.s] = "M"; count++; }));
+  if (count) { label(history); changed({ structure: true }); }
+  return count;
+}
+
+// 2) before building: fewer available people than positions
+function shortages() {
+  const out = [];
+  S.dates.forEach((date, d) => S.config.shifts.forEach((sh, s) => {
+    const need = staffNeed(sh, date);
+    if (need <= 0) return;
+    const avail = S.config.employees.filter((e) => effLevel(e, d, s) !== "X").length;
+    if (avail < need) out.push({ d, s, short: need - avail,
+      taken: S.config.employees.filter((e) => effLevel(e, d, s) !== "X").map((e) => e.name) });
+  }));
+  return out;
+}
+async function chooseForShortages(okLabel = t("Apply")) {
+  const slots = shortages();
+  if (!slots.length) return true;
+  const n = await chooseCover({
+    title: t("No one available for some shifts"),
+    intro: t("Everyone else has \"Must not work\" for these shifts. Choose who should cover them (they are set to \"Must work\" for that shift), or leave the shift unfilled."),
+    okLabel, slots,
+    why: (e, sl) => (S.grid[e.name][sl.d][sl.s] === "X" ? t("marked must not work") : ""),
+  });
+  if (n === null) return false;
+  if (n) toast(tn(n, "{n} person set to \"Must work\".", "{n} people set to \"Must work\"."), true);
+  return true;
+}
+
+// 3) after building: positions the solver could not fill (rest times, maximums, ...)
+async function chooseForUnfilled() {
+  const R = S.result;
+  const slots = R.slots.filter((sl) => sl.people.includes(null))
+    .map((sl) => ({ d: sl.d, s: sl.s, short: sl.people.filter((p) => !p).length, taken: sl.people.filter(Boolean).map((p) => p.name) }));
+  if (!slots.length) return 0;
+  const worksOn = {}, totals = {};
+  R.slots.forEach((sl) => sl.people.forEach((p) => {
+    if (!p) return;
+    (worksOn[`${p.name}:${sl.d}`] ||= []).push(R.shifts[sl.s].name);
+    totals[p.name] = (totals[p.name] || 0) + 1;
+  }));
+  const n = await chooseCover({
+    title: t("No one could be scheduled"),
+    intro: t("The schedule leaves these shifts empty. Choose who should cover them (set to \"Must work\" for that shift) and the schedule is rebuilt. The note after a name says why they were not used."),
+    okLabel: t("Apply and rebuild"), slots,
+    why: (e, sl) => {
+      const notes = [];
+      if (S.grid[e.name][sl.d][sl.s] === "X") notes.push(t("marked must not work"));
+      if (worksOn[`${e.name}:${sl.d}`]) notes.push(t("works {list} that day", { list: worksOn[`${e.name}:${sl.d}`].join(", ") }));
+      if (e.max_shifts != null && (totals[e.name] || 0) >= e.max_shifts) notes.push(t("at max {n} shifts", { n: e.max_shifts }));
+      return notes.join(", ");
+    },
+  });
+  return n || 0;
+}
+
+// ---------- change one shift of the built schedule by hand ----------
+async function editSlot(d, s) {
+  const R = S.result;
+  const sl = R.slots.find((x) => x.d === d && x.s === s);
+  if (!sl) return;
+  if (isStale()) {
+    return toast(t("The team, shifts or availability changed since this schedule was built. Build it again, then change shifts by hand."));
+  }
+  const sh = S.config.shifts[s];
+  const current = sl.people.filter(Boolean).map((p) => p.name);
+  const worksOn = {}, totals = {};
+  R.slots.forEach((x) => x.people.forEach((p) => {
+    if (!p) return;
+    if (!(x.d === d && x.s === s)) (worksOn[`${p.name}:${x.d}`] ||= []).push(R.shifts[x.s].name);
+    totals[p.name] = (totals[p.name] || 0) + 1;
+  }));
+  const levelText = { M: t("must work"), C: t("can work"), N: t("neutral").toLowerCase(), X: t("must not work") };
+  const options = S.config.employees.map((e) => {
+    const has = current.includes(e.name);
+    const blocked = !worksNights(e) && isNightShift(sh);
+    const notes = [levelText[S.grid[e.name][d][s]]];
+    if (worksOn[`${e.name}:${d}`]) notes.push(t("works {list} that day", { list: worksOn[`${e.name}:${d}`].join(", ") }));
+    if (!has && e.max_shifts != null && (totals[e.name] || 0) >= e.max_shifts) notes.push(t("already has {n} shifts (max)", { n: e.max_shifts }));
+    return { value: e.name, label: e.name, checked: has, disabled: blocked && !has, why: blocked ? t("doesn't work nights") : notes.join(", ") };
+  });
+  const picks = await pickDialog({
+    title: `${whenLabel(d)} · ${R.shifts[s].label}`,
+    intro: t("Choose who works this shift. The note after each name shows their availability and other shifts that day. Rules are checked again when you save."),
+    okLabel: t("Save changes"),
+    groups: [{ legend: tn(sl.need, "{n} place", "{n} places"), min: 0, max: sl.need, options,
+      hint: t("Choose up to {n}. Places left empty stay unfilled.", { n: sl.need }) }],
+  });
+  if (!picks || (picks[0].length === current.length && picks[0].every((n) => current.includes(n)))) return;
+  try {
+    const slots = R.slots.map((x) => ({ d: x.d, s: x.s, people: x === sl ? picks[0] : x.people.map((p) => p && p.name) }));
+    const res = await api("/api/evaluate", { ...payload(), slots });
+    Object.assign(res, { fingerprint: R.fingerprint, edited: true, seconds: R.seconds });
+    beginStep();
+    S.result = res;
+    label("Changed {when} {shift} by hand", { when: whenLabel(d), shift: R.shifts[s].name });
+    recordUndo();
+    renderSchedule();
+    saveSchedule();
+    toast(res.problems.length ? tn(res.problems.length, "Saved. {n} problem to check, see the list above.", "Saved. {n} problems to check, see the list above.") : t("Saved. No rule problems."), true);
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+// ---------- actions ----------
+async function solve() {
+  if (!S.config.employees.length || !S.config.shifts.length) return toast(t("Add at least one employee and one shift first."));
+  if (!(await chooseMustWinners(t("Apply and continue")))) return;
+  if (!(await chooseForShortages(t("Continue")))) return;
+  if (!(await buildSchedule())) return;
+  if (await chooseForUnfilled()) await buildSchedule();  // rebuild with the admin's choices
+}
+async function buildSchedule() {
+  const preset = PRESETS[$("#quality").value];
+  const busy = $("#busy"), sub = $("#busy-sub"), btn = $("#solve-btn");
+  const t0 = Date.now();
+  const timer = setInterval(() => (sub.textContent = `${Math.round((Date.now() - t0) / 1000)} s`), 500);
+  sub.textContent = "0 s";
+  busy.style.display = "flex";
+  btn.disabled = true;
+  try {
+    const fp = fingerprint();
+    const built = await api("/api/solve", { ...payload(), ...preset });
+    beginStep();
+    S.result = built;
+    S.result.fingerprint = fp;
+    S.highlight = null;
+    label("Built the schedule");
+    recordUndo();
+    saveSchedule();
+    switchTab("schedule");
+    return true;
+  } catch (e) {
+    toast(e.message);
+    return false;
+  } finally {
+    clearInterval(timer);
+    busy.style.display = "none";
+    btn.disabled = false;
+  }
+}
+// ---------- autosave: every edit is written to the config file shortly after it happens ----------
+let saveTimer = null, saving = false;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 800);
+}
+async function save() {
+  if (saving) return scheduleSave();  // one request at a time; retry once the current one finishes
+  saving = true;
+  const edits = S.edits;
+  try {
+    const r = await api("/api/save", payload());
+    S.saveError = null;
+    if (S.edits === edits) S.dirty = false;
+    S.savedTo = r.saved;
+  } catch (e) {
+    S.saveError = e.message;
+  } finally {
+    saving = false;
+    updateStatus();
+  }
+}
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+  for (const id of ["team", "avail", "schedule"]) $(`#tab-${id}`).hidden = id !== name;
+  if (name === "avail") renderAvail();
+  if (name === "schedule") renderSchedule();
+}
+function initMoreOptions() {
+  let saved = null;
+  try { saved = localStorage.getItem("moreOptions"); } catch (e) { /* storage unavailable */ }
+  const used = S.config.employees.some((e) => e.min_shifts);
+  const on = saved === null ? used : saved === "1";
+  $("#more-opts").checked = on;
+  $("#emp-table").classList.toggle("basic", !on);
+}
+function renderAll() {
+  initMoreOptions();
+  $("#month").value = S.config.month;
+  renderTeam();
+  renderAvail();
+  renderSchedule();
+}
+
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+$("#add-emp").addEventListener("click", addEmployee);
+$("#add-shift").addEventListener("click", addShift);
+$("#undo-btn").addEventListener("click", undo);
+// ---------- printing: shrink the plan so it fits one A4 landscape page (also for Ctrl+P) ----------
+const A4 = { w: (277 * 96) / 25.4, h: (190 * 96) / 25.4 };  // printable area in CSS px (297 x 210 mm minus 10 mm margins)
+let afterPrint = null;
+window.addEventListener("beforeprint", () => {
+  const tab = $("#tab-schedule"), wasHidden = tab.hidden;
+  tab.hidden = false;                       // printing from another tab still prints the plan
+  document.body.classList.add("printing");
+  const area = document.querySelector(".print-area");
+  if (area) {
+    area.style.zoom = "1";
+    const zoom = Math.min(1, A4.w / area.scrollWidth, (A4.h * 0.98) / area.scrollHeight);
+    area.style.zoom = String(Math.floor(zoom * 1000) / 1000);
+  }
+  afterPrint = () => { tab.hidden = wasHidden; if (area) area.style.zoom = ""; };
+});
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("printing");
+  if (afterPrint) afterPrint();
+  afterPrint = null;
+});
+
+// ---------- settings menu (☰) ----------
+function setMenu(open) {
+  $("#menu").hidden = !open;
+  $("#menu-btn").setAttribute("aria-expanded", String(open));
+}
+$("#menu-btn").addEventListener("click", (ev) => { ev.stopPropagation(); setMenu($("#menu").hidden); });
+document.addEventListener("click", (ev) => { if (!$("#menu").hidden && !ev.target.closest(".menu-wrap")) setMenu(false); });
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("#menu").hidden) { setMenu(false); $("#menu-btn").focus(); } });
+// colour theme: Auto follows the system setting, Light/Dark override it (remembered in this browser)
+function showTheme() {
+  const t = document.documentElement.dataset.theme || "auto";
+  document.querySelectorAll("[data-theme-choice]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.themeChoice === t);
+    b.setAttribute("aria-pressed", String(b.dataset.themeChoice === t));
+  });
+}
+document.querySelectorAll("[data-theme-choice]").forEach((b) => b.addEventListener("click", () => {
+  const t = b.dataset.themeChoice;
+  if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { if (t === "auto") localStorage.removeItem("theme"); else localStorage.setItem("theme", t); } catch (e) { /* storage unavailable */ }
+  showTheme();
+}));
+showTheme();
+// language: re-translate everything; the problem list of the current schedule comes from the server,
+// so it is checked again in the new language (the schedule itself does not change)
+document.querySelectorAll("[data-lang-choice]").forEach((b) => b.addEventListener("click", async () => {
+  if (b.dataset.langChoice === LANG) return;
+  LANG = b.dataset.langChoice;
+  try { localStorage.setItem("lang", LANG); } catch (e) { /* storage unavailable */ }
+  applyStaticTexts();
+  renderHistory();
+  if (!S.config) return;
+  renderAll();
+  updateStatus();
+  if (S.result && !isStale()) {
+    try {
+      const R = S.result;
+      const slots = R.slots.map((x) => ({ d: x.d, s: x.s, people: x.people.map((q) => q && q.name) }));
+      const res = await api("/api/evaluate", { ...payload(), slots });
+      S.result = Object.assign(res, { fingerprint: R.fingerprint, edited: R.edited, seconds: R.seconds, cost: R.cost });
+      renderSchedule();
+      saveSchedule();
+    } catch (e) { /* keep the old texts */ }
+  }
+}));
+document.addEventListener("keydown", (ev) => {
+  // Ctrl+Z / Cmd+Z undoes app changes; inside a text field the browser's own undo is kept
+  if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && ev.key.toLowerCase() === "z" && !ev.target.matches("input[type=text], input[type=number], textarea")) {
+    ev.preventDefault();
+    undo();
+  }
+});
+$("#more-opts").addEventListener("change", (ev) => {
+  $("#emp-table").classList.toggle("basic", !ev.target.checked);
+  try { localStorage.setItem("moreOptions", ev.target.checked ? "1" : "0"); } catch (e) { /* storage unavailable */ }
+});
+document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { switchTab(b.dataset.go); window.scrollTo(0, 0); }));
+$("#step2-build").addEventListener("click", solve);
+$("#solve-btn").addEventListener("click", solve);
+$("#month").addEventListener("change", (ev) => changeMonth(ev.target.value));
+document.querySelectorAll("[data-rule]").forEach((inp) => inp.addEventListener("input", () => {
+  const v = inp.value.trim();
+  S.config.rules[inp.dataset.rule] = v === "" ? S.defaults.rules[inp.dataset.rule] : Number(v);
+  label("Rules changed");
+  changed();
+}));
+// ---------- data: backup, restore, delete all ----------
+$("#backup-btn").addEventListener("click", async (ev) => {
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/backup", { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify(payload()) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+    download(`shift-planner-backup_${iso(new Date())}.json`, await r.blob());
+  } catch (e) {
+    toast(t("Backup failed: {e}", { e: e.message }));
+  } finally {
+    btn.disabled = false;
+  }
+});
+// after a restore or delete the page reloads from the files; a pending autosave must not write the old data back
+async function stopSaving() {
+  clearTimeout(saveTimer);
+  while (saving) await new Promise((ok) => setTimeout(ok, 100));
+  clearTimeout(saveTimer);
+  S.dirty = false;
+  S.saveError = null;
+}
+$("#restore-btn").addEventListener("click", () => $("#restore-file").click());
+$("#restore-file").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = "";  // choosing the same file again fires change again
+  if (!file || !confirm(t("Replace ALL current data (employees, shifts, availability, rules and every saved schedule) with \"{file}\"? This cannot be undone.", { file: file.name }))) return;
+  try {
+    let backup;
+    try { backup = JSON.parse(await file.text()); } catch (e) { throw new Error(t("This file is not a backup of the shift planner.")); }
+    await stopSaving();
+    await api("/api/restore", { backup });
+    location.reload();
+  } catch (e) {
+    toast(t("Import failed: {e}", { e: e.message }));
+  }
+});
+$("#delete-all-btn").addEventListener("click", async () => {
+  if (!confirm(t("Delete ALL data: every employee, shift, availability, rule and saved schedule? This cannot be undone. Export a backup first if you may need it again."))) return;
+  try {
+    await stopSaving();
+    await api("/api/delete-all", { month: S.config?.month });
+    location.reload();
+  } catch (e) {
+    toast(t("Delete failed: {e}", { e: e.message }));
+  }
+});
+window.addEventListener("beforeunload", (ev) => {
+  if (!S.dirty) return;
+  if (S.saveError) { ev.preventDefault(); ev.returnValue = ""; return; }  // input is invalid, warn instead
+  clearTimeout(saveTimer);
+  navigator.sendBeacon("/api/save", new Blob([JSON.stringify(payload())], { type: "text/plain" }));
+});
+applyStaticTexts();
+renderHistory();
+setupPainting();
+init();
+</script>
+</body>
+</html>

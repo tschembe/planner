@@ -1,0 +1,40 @@
+{
+  "month": "2026-10",
+
+  "employees": [
+    {"name": "Alex",   "max_shifts": 22, "night_shifts": false},
+    {"name": "Bella",  "max_shifts": 22},
+    {"name": "Chris",  "max_shifts": 22},
+    {"name": "Dana",   "max_shifts": 22},
+    {"name": "Eli",    "max_shifts": 22},
+    {"name": "Farah",  "max_shifts": 22, "night_shifts": false},
+    {"name": "George", "max_shifts": 22},
+    {"name": "Hana",   "max_shifts": 12, "contract": "part-time"},
+    {"name": "Ivan",   "max_shifts": 22, "min_shifts": 15}
+  ],
+
+  "shifts": [
+    {"name": "Morning", "start": "06:00", "end": "14:00", "staff": 2},
+    {"name": "Evening", "start": "14:00", "end": "22:00", "staff": 2, "staff_by_weekday": {"Fri": 3, "Sat": 3}},
+    {"name": "Night",   "start": "22:00", "end": "06:00", "staff": 1}
+  ],
+
+  "rules": {
+    "min_rest_hours": 11,
+    "max_consecutive_days": 6,
+    "max_shifts_per_day": 1,
+    "weekend": ["Sat", "Sun"]
+  },
+
+  "availability": {
+    "Alex":   {"default": "can"},
+    "Bella":  {"default": "neutral", "weekdays": {"Sun": "never"}, "shifts": {"Morning": "can"}},
+    "Chris":  {"default": "neutral", "shifts": {"Night": "can"}, "dates": {"2026-10-12..2026-10-18": "never"}},
+    "Dana":   {"default": "can", "date_shifts": {"2026-10-03 Evening": "must", "2026-10-10 Evening": "must"}},
+    "Eli":    {"default": "neutral", "weekday_shifts": {"Sat Night": "must", "Sun Night": "can"}},
+    "Farah":  {"default": "neutral", "dates": {"2026-10-24": "never", "2026-10-25": "never"}},
+    "George": {"default": "can"},
+    "Hana":   {"default": "never", "weekdays": {"Fri": "can", "Sat": "can", "Sun": "neutral"}},
+    "Ivan":   {"default": "neutral", "weekdays": {"Mon": "never"}, "dates": {"2026-10-05..2026-10-09": "never"}}
+  }
+}
