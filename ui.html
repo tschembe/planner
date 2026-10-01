@@ -511,6 +511,11 @@ const DE = {
   "Delete ALL data: every employee, shift, availability, rule and saved schedule? This cannot be undone. Export a backup first if you may need it again.":
     "ALLE Daten löschen: alle Mitarbeitenden, Schichten, Verfügbarkeiten, Regeln und gespeicherten Dienstpläne? Das kann nicht rückgängig gemacht werden. Vorher eine Sicherung exportieren, falls sie noch gebraucht werden.",
   "Delete failed: {e}": "Löschen fehlgeschlagen: {e}",
+  "Changes are saved in this browser": "Änderungen werden in diesem Browser gespeichert",
+  "Loading… (the first visit downloads about 10 MB)": "Wird geladen … (beim ersten Besuch werden etwa 10 MB heruntergeladen)",
+  "Could not start the planner in this browser: {e}": "Der Planer konnte in diesem Browser nicht gestartet werden: {e}",
+  "This browser does not let the page store data, so changes are lost when it is closed. Use Export backup to keep them.":
+    "Dieser Browser erlaubt der Seite nicht, Daten zu speichern; Änderungen gehen beim Schließen verloren. Mit „Sicherung exportieren“ aufbewahren.",
   "Team & shifts": "Team & Schichten", "Availability": "Verfügbarkeit", "Schedule": "Dienstplan",
   "Step 1 of 3": "Schritt 1 von 3", "Step 2 of 3": "Schritt 2 von 3", "Step 3 of 3": "Schritt 3 von 3",
   "Add your employees and shifts, and check the rules.": "Mitarbeitende und Schichten eintragen und die Regeln prüfen.",
@@ -715,10 +720,60 @@ function applyStaticTexts() {
 }
 
 // ---------- unexpected errors in this page are logged by the server (logs/errors.jsonl) ----------
+// ---------- where the /api/... requests go ----------
+// From ui.py (python3 ui.py) they go to that server, which keeps the data in config.json and schedule_*.json.
+// Hosted as static files (e.g. GitHub Pages) the same Python code runs in the browser (webworker.js, Pyodide)
+// and the data files are kept in this browser's localStorage.
+const LOCAL_SERVER = ["127.0.0.1", "localhost"].includes(location.hostname);
+const FILES_KEY = "planner-files", PENDING_KEY = "planner-pending-save";
+let worker = null, workerReady = null, workerSeq = 0, storeWarned = false;
+const workerCalls = new Map();
+function storeFiles(files) {
+  try { localStorage.setItem(FILES_KEY, JSON.stringify(files)); } catch (e) {
+    if (!storeWarned) toast(t("This browser does not let the page store data, so changes are lost when it is closed. Use Export backup to keep them."));
+    storeWarned = true;
+  }
+}
+function startWorker() {
+  let files = {}, pendingSave = null;
+  try {
+    files = JSON.parse(localStorage.getItem(FILES_KEY) || "{}");
+    pendingSave = localStorage.getItem(PENDING_KEY);
+  } catch (e) { /* storage unavailable: start empty */ }
+  worker = new Worker("webworker.js", { type: "module" });
+  workerReady = new Promise((ok, fail) => {
+    worker.onmessage = ({ data: m }) => {
+      if (m.type === "ready") {
+        storeFiles(m.files);
+        try { localStorage.removeItem(PENDING_KEY); } catch (e) { /* storage unavailable */ }
+        return ok();
+      }
+      if (m.type === "failed") return fail(new Error(t("Could not start the planner in this browser: {e}", { e: m.error })));
+      const call = workerCalls.get(m.id);
+      workerCalls.delete(m.id);
+      if (m.files) storeFiles(m.files);
+      call(new Response(m.body, { status: m.status, headers: { "Content-Type": m.ctype, ...m.headers } }));
+    };
+    worker.onerror = (e) => fail(new Error(t("Could not start the planner in this browser: {e}", { e: e.message })));
+  });
+  worker.postMessage({ type: "start", files, pendingSave });
+}
+// same interface as fetch(), so callers do not care where the request is handled
+async function apiFetch(url, opts = {}) {
+  if (LOCAL_SERVER) return fetch(url, opts);
+  if (!worker) startWorker();
+  await workerReady;
+  const id = ++workerSeq;
+  return new Promise((ok) => {
+    workerCalls.set(id, ok);
+    worker.postMessage({ id, url, method: opts.method || "GET", body: opts.body ?? null, lang: opts.headers?.["X-Lang"] || LANG });
+  });
+}
+
 let reported = 0;
 function reportError(message, stack, where) {
   if (++reported > 10) return;  // do not flood the log if something loops
-  fetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" },
+  apiFetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, stack, where }) })
     .then((r) => r.json()).then((j) => j.id && toast(t("Something went wrong ({id}). It was logged; reloading the page usually helps.", { id: j.id })))
     .catch(() => {});
@@ -743,7 +798,7 @@ function el(tag, attrs = {}, ...kids) {
 async function api(path, body) {
   const opts = body === undefined ? { headers: { "X-Lang": LANG } }
     : { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify(body) };
-  const r = await fetch(path, opts);
+  const r = await apiFetch(path, opts);
   const j = await r.json().catch(() => ({ error: r.statusText }));
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
@@ -875,7 +930,8 @@ function markEdited() {
 function updateStatus() {
   const st = $("#status");
   if (S.saveError) { st.textContent = t("Not saved: {e}", { e: S.saveError }); st.className = "error"; return; }
-  const base = S.savedTo ? t("All changes saved to {to}", { to: S.savedTo })
+  const base = !LOCAL_SERVER ? (S.loadedFrom ? t("Changes are saved in this browser") : "")
+    : S.savedTo ? t("All changes saved to {to}", { to: S.savedTo })
     : S.loadedFrom ? t("Loaded {from} · changes save automatically to {to}", { from: S.loadedFrom, to: S.saveTo }) : "";
   st.textContent = S.dirty ? t("Saving…") : base;
   st.className = S.dirty ? "dirty" : "";
@@ -883,6 +939,7 @@ function updateStatus() {
 
 // ---------- load ----------
 async function init() {
+  if (!LOCAL_SERVER) $("#status").textContent = t("Loading… (the first visit downloads about 10 MB)");
   try {
     const { config, loaded_from, save_to, defaults, restart_needed } = await api("/api/config");
     if (restart_needed) {
@@ -1668,7 +1725,7 @@ async function exportExcel(ev) {
   const btn = ev.currentTarget;
   btn.disabled = true;
   try {
-    const r = await fetch("/api/export-xlsx", { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify({ result: S.result }) });
+    const r = await apiFetch("/api/export-xlsx", { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify({ result: S.result }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
     download(`schedule_${S.result.month}.xlsx`, await r.blob());
   } catch (e) {
@@ -2069,7 +2126,7 @@ $("#backup-btn").addEventListener("click", async (ev) => {
   const btn = ev.currentTarget;
   btn.disabled = true;
   try {
-    const r = await fetch("/api/backup", { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify(payload()) });
+    const r = await apiFetch("/api/backup", { method: "POST", headers: { "Content-Type": "application/json", "X-Lang": LANG }, body: JSON.stringify(payload()) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
     download(`shift-planner-backup_${iso(new Date())}.json`, await r.blob());
   } catch (e) {
@@ -2115,7 +2172,9 @@ window.addEventListener("beforeunload", (ev) => {
   if (!S.dirty) return;
   if (S.saveError) { ev.preventDefault(); ev.returnValue = ""; return; }  // input is invalid, warn instead
   clearTimeout(saveTimer);
-  navigator.sendBeacon("/api/save", new Blob([JSON.stringify(payload())], { type: "text/plain" }));
+  if (LOCAL_SERVER) return navigator.sendBeacon("/api/save", new Blob([JSON.stringify(payload())], { type: "text/plain" }));
+  // the in-browser Python cannot finish while the page closes: keep the edits, they are saved on the next start
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(payload())); } catch (e) { /* storage unavailable */ }
 });
 applyStaticTexts();
 renderHistory();

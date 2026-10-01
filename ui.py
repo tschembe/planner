@@ -240,13 +240,116 @@ def result_dict(p, sv, seconds, log):
     }
 
 
-class Handler(BaseHTTPRequestHandler):
-    config_path = None
+class Api:
+    """The /api/... requests, independent of how they arrive: ui.py's HTTP server, or webworker.js
+    running this file with Pyodide when the page is hosted as static files (e.g. GitHub Pages)."""
+
+    def __init__(self, config_path):
+        self.config_path = config_path
 
     def schedule_path(self, month):
-        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", str(month)):
+        if not MONTH_RE.fullmatch(str(month)):
             raise sch.ConfigError(f"bad month {month!r}")
         return os.path.join(os.path.dirname(self.config_path), f"schedule_{month}.json")
+
+    def handle(self, method, url, payload=None, lang="en"):
+        """-> (status, body, content type, extra headers); body is bytes, or something to send as JSON."""
+        i18n.set_lang(lang)  # language of messages for this request
+        path = urlsplit(url).path
+        try:
+            return self._get(url) if method == "GET" else self._post(path, payload or {})
+        except sch.ConfigError as exc:
+            errorlog.record("input", path, str(exc))
+            return 400, {"error": str(exc)}, "application/json", {}
+        except (KeyError, ValueError, TypeError) as exc:
+            errorlog.record("input", path, f"invalid input: {exc}", exc=exc)
+            return 400, {"error": _("invalid input: {error}", error=exc)}, "application/json", {}
+        except Exception as exc:  # unexpected: log it with an id the user can quote
+            err_id = errorlog.bug(f"server {method} {path}", exc)
+            return 500, {"error": _("Unexpected error ({id}). Details: python3 errorlog.py --id {id}", id=err_id)}, "application/json", {}
+
+    @staticmethod
+    def _ok(body, ctype="application/json", headers=None):
+        return 200, body, ctype, headers or {}
+
+    def _get(self, url):
+        path = urlsplit(url).path
+        if path == "/api/config":
+            path = self.config_path if os.path.exists(self.config_path) else os.path.join(HERE, "example_config.json")
+            try:
+                with open(path, encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except (OSError, json.JSONDecodeError) as exc:
+                return 400, {"error": str(exc)}, "application/json", {}
+            return self._ok({"config": cfg, "loaded_from": shown(path),
+                             "save_to": shown(self.config_path),
+                             "defaults": {"rules": sch.DEFAULT_RULES, "weights": sch.DEFAULT_WEIGHTS},
+                             "restart_needed": code_stamp() != STARTED_WITH})
+        if path == "/api/schedule":
+            # the last schedule built for a month, so it survives reloads and restarts
+            try:
+                sched = self.schedule_path(parse_qs(urlsplit(url).query).get("month", [""])[0])
+                if not os.path.exists(sched):
+                    return self._ok({"result": None})
+                with open(sched, encoding="utf-8") as f:
+                    return self._ok({"result": json.load(f)})
+            except (sch.ConfigError, OSError, json.JSONDecodeError) as exc:
+                return 400, {"error": str(exc)}, "application/json", {}
+        return 404, {"error": "not found"}, "application/json", {}
+
+    def _post(self, path, payload):
+        if path == "/api/resolve":
+            # with a grid: fold it into rules first, so weekly patterns carry over to another month
+            cfg = config_from_payload(payload) if "grid" in payload else payload["config"]
+            return self._ok(resolve(cfg, payload.get("month"), os.path.dirname(self.config_path)))
+        if path == "/api/solve":
+            cfg = config_from_payload(payload)
+            seed = payload.get("seed")
+            return self._ok(run_solver(cfg, int(payload.get("iterations", 150_000)),
+                                       int(payload.get("restarts", 3)),
+                                       None if seed in (None, "") else int(seed)))
+        if path == "/api/evaluate":
+            return self._ok(evaluate(config_from_payload(payload), payload["slots"]))
+        if path == "/api/schedule":
+            result = payload["result"]
+            sched = self.schedule_path(result["month"])
+            write_json(sched, result)
+            return self._ok({"saved": shown(sched)})
+        if path == "/api/export-xlsx":
+            result = payload["result"]
+            name = f"schedule_{result['month']}.xlsx"
+            return self._ok(build_schedule_xlsx(result),
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            {"Content-Disposition": f'attachment; filename="{name}"'})
+        if path == "/api/backup":
+            backup = make_backup(config_from_payload(payload), os.path.dirname(self.config_path))
+            name = f"shift-planner-backup_{dt.date.today().isoformat()}.json"
+            return self._ok(json.dumps(backup, indent=2, ensure_ascii=False).encode(), "application/json",
+                            {"Content-Disposition": f'attachment; filename="{name}"'})
+        if path == "/api/restore":
+            restore_backup(payload.get("backup"), self.config_path)
+            errorlog.log.info("restored a backup into %s", shown(self.config_path))
+            return self._ok({"restored": shown(self.config_path)})
+        if path == "/api/delete-all":
+            delete_all_data(self.config_path, payload.get("month"))
+            errorlog.log.info("deleted all data in %s", shown(self.config_path))
+            return self._ok({"deleted": True})
+        if path == "/api/client-error":
+            # an error in the browser page, reported by the page itself
+            err_id = errorlog.record("bug", "page", str(payload.get("message", "?"))[:500],
+                                     tb=str(payload.get("stack") or "")[:5000] or None,
+                                     context={"where": payload.get("where")})
+            return self._ok({"id": err_id})
+        if path == "/api/save":
+            cfg = config_from_payload(payload)
+            sch.Problem(cfg)  # validate before writing
+            write_json(self.config_path, cfg)  # autosave and the save-on-close beacon may overlap
+            return self._ok({"saved": shown(self.config_path)})
+        return 404, {"error": "not found"}, "application/json", {}
+
+
+class Handler(BaseHTTPRequestHandler):
+    api = None
 
     def log_message(self, fmt, *args):
         pass
@@ -266,107 +369,18 @@ class Handler(BaseHTTPRequestHandler):
             pass  # the tab was closed or reloaded while a request (e.g. a long solve) was running
 
     def do_GET(self):
-        i18n.set_lang(self.headers.get("X-Lang", "en"))  # language of messages for this request
-        try:
-            self._get()
-        except Exception as exc:  # unexpected: log it with an id the user can quote
-            self._unexpected(exc)
-
-    def _unexpected(self, exc):
-        err_id = errorlog.bug(f"server {self.command} {urlsplit(self.path).path}", exc)
-        self._send(500, {"error": _("Unexpected error ({id}). Details: python3 errorlog.py --id {id}", id=err_id)})
-
-    def _get(self):
-        path = urlsplit(self.path).path
-        if path in ("/", "/index.html"):
+        if urlsplit(self.path).path in ("/", "/index.html"):
             with open(os.path.join(HERE, "ui.html"), "rb") as f:
                 return self._send(200, f.read(), "text/html; charset=utf-8")
-        if path == "/api/config":
-            path = self.config_path if os.path.exists(self.config_path) else os.path.join(HERE, "example_config.json")
-            try:
-                with open(path, encoding="utf-8") as f:
-                    cfg = json.load(f)
-                return self._send(200, {"config": cfg, "loaded_from": shown(path),
-                                        "save_to": shown(self.config_path),
-                                        "defaults": {"rules": sch.DEFAULT_RULES, "weights": sch.DEFAULT_WEIGHTS},
-                                        "restart_needed": code_stamp() != STARTED_WITH})
-            except (OSError, json.JSONDecodeError) as exc:
-                return self._send(400, {"error": str(exc)})
-        if path == "/api/schedule":
-            # the last schedule built for a month, so it survives reloads and restarts
-            try:
-                sched = self.schedule_path(parse_qs(urlsplit(self.path).query).get("month", [""])[0])
-                if not os.path.exists(sched):
-                    return self._send(200, {"result": None})
-                with open(sched, encoding="utf-8") as f:
-                    return self._send(200, {"result": json.load(f)})
-            except (sch.ConfigError, OSError, json.JSONDecodeError) as exc:
-                return self._send(400, {"error": str(exc)})
-        self._send(404, {"error": "not found"})
+        self._send(*self.api.handle("GET", self.path, lang=self.headers.get("X-Lang", "en")))
 
     def do_POST(self):
-        i18n.set_lang(self.headers.get("X-Lang", "en"))
         try:
             length = int(self.headers.get("Content-Length", 0))
             payload = json.loads(self.rfile.read(length) or b"{}")
-            path = urlsplit(self.path).path
-            if path == "/api/resolve":
-                # with a grid: fold it into rules first, so weekly patterns carry over to another month
-                cfg = config_from_payload(payload) if "grid" in payload else payload["config"]
-                return self._send(200, resolve(cfg, payload.get("month"), os.path.dirname(self.config_path)))
-            if path == "/api/solve":
-                cfg = config_from_payload(payload)
-                seed = payload.get("seed")
-                return self._send(200, run_solver(cfg, int(payload.get("iterations", 150_000)),
-                                                  int(payload.get("restarts", 3)),
-                                                  None if seed in (None, "") else int(seed)))
-            if path == "/api/evaluate":
-                return self._send(200, evaluate(config_from_payload(payload), payload["slots"]))
-            if path == "/api/schedule":
-                result = payload["result"]
-                sched = self.schedule_path(result["month"])
-                write_json(sched, result)
-                return self._send(200, {"saved": shown(sched)})
-            if path == "/api/export-xlsx":
-                result = payload["result"]
-                name = f"schedule_{result['month']}.xlsx"
-                return self._send(200, build_schedule_xlsx(result),
-                                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                  {"Content-Disposition": f'attachment; filename="{name}"'})
-            if path == "/api/backup":
-                folder = os.path.dirname(self.config_path)
-                backup = make_backup(config_from_payload(payload), folder)
-                name = f"shift-planner-backup_{dt.date.today().isoformat()}.json"
-                return self._send(200, json.dumps(backup, indent=2, ensure_ascii=False).encode(),
-                                  "application/json", {"Content-Disposition": f'attachment; filename="{name}"'})
-            if path == "/api/restore":
-                restore_backup(payload.get("backup"), self.config_path)
-                errorlog.log.info("restored a backup into %s", shown(self.config_path))
-                return self._send(200, {"restored": shown(self.config_path)})
-            if path == "/api/delete-all":
-                delete_all_data(self.config_path, payload.get("month"))
-                errorlog.log.info("deleted all data in %s", shown(self.config_path))
-                return self._send(200, {"deleted": True})
-            if path == "/api/client-error":
-                # an error in the browser page, reported by the page itself
-                err_id = errorlog.record("bug", "page", str(payload.get("message", "?"))[:500],
-                                         tb=str(payload.get("stack") or "")[:5000] or None,
-                                         context={"where": payload.get("where")})
-                return self._send(200, {"id": err_id})
-            if path == "/api/save":
-                cfg = config_from_payload(payload)
-                sch.Problem(cfg)  # validate before writing
-                write_json(self.config_path, cfg)  # autosave and the save-on-close beacon may overlap
-                return self._send(200, {"saved": shown(self.config_path)})
-            self._send(404, {"error": "not found"})
-        except sch.ConfigError as exc:
-            errorlog.record("input", path, str(exc))
-            self._send(400, {"error": str(exc)})
-        except (KeyError, ValueError, TypeError) as exc:
-            errorlog.record("input", path, f"invalid input: {exc}", exc=exc)
-            self._send(400, {"error": _("invalid input: {error}", error=exc)})
-        except Exception as exc:
-            self._unexpected(exc)
+        except ValueError as exc:
+            return self._send(400, {"error": _("invalid input: {error}", error=exc)})
+        self._send(*self.api.handle("POST", self.path, payload, self.headers.get("X-Lang", "en")))
 
 
 def main():
@@ -377,7 +391,7 @@ def main():
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
 
-    Handler.config_path = os.path.abspath(args.config)
+    Handler.api = Api(os.path.abspath(args.config))
     errorlog.setup()
     ThreadingHTTPServer.daemon_threads = True  # Ctrl+C stops at once, even during a long build
     try:
@@ -387,7 +401,7 @@ def main():
               f"Is the scheduler already running in another terminal? Stop it there with Ctrl+C,\n"
               f"or start this one on another port: python3 ui.py --port {args.port + 1}", file=sys.stderr)
         return 1
-    errorlog.log.info("server started on port %s with %s", args.port, shown(Handler.config_path))
+    errorlog.log.info("server started on port %s with %s", args.port, shown(Handler.api.config_path))
     url = f"http://127.0.0.1:{args.port}/"
     print(f"Scheduler UI running at {url}  (Ctrl+C to stop)")
     if not args.no_browser:

@@ -3,6 +3,15 @@
 Pure Python 3 (no dependencies). Builds a month of shift assignments from each
 employee's availability and optimises it.
 
+## Use it online
+
+**https://tschembe.github.io/planner/**: the same app, nothing to install. The Python code runs in the
+browser ([Pyodide](https://pyodide.org), `webworker.js`; the first visit downloads about 10 MB), and the data
+stays in that browser's storage: nothing is uploaded. Each browser and device has its own data, and clearing
+the browser's site data deletes it, so use **Export backup** regularly and **Import backup** to move to another
+device. Building a schedule takes a little longer than with `ui.py`. The site is served by GitHub Pages from
+the `main` branch (`index.html` forwards to `ui.html`).
+
 ## Browser UI
 
 ```bash
